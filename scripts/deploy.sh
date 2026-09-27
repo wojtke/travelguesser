@@ -28,6 +28,11 @@ gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregi
 
 gcloud firestore databases describe --database='(default)' --project="$PROJECT_ID" >/dev/null 2>&1 ||
   gcloud firestore databases create --database='(default)' --location="$REGION" --type=firestore-native --project="$PROJECT_ID" --quiet
+# Nested live players/guesses and photo coordinates are never queried by value.
+# Exempt them to avoid indexing every player identifier and result.
+for FIELD in live photos; do
+  gcloud firestore indexes fields update "$FIELD" --collection-group=games --disable-indexes --project="$PROJECT_ID" --quiet
+done
 gcloud storage buckets describe "gs://${BUCKET}" --project="$PROJECT_ID" >/dev/null 2>&1 ||
   gcloud storage buckets create "gs://${BUCKET}" --location="$REGION" --uniform-bucket-level-access --public-access-prevention --project="$PROJECT_ID" --quiet
 

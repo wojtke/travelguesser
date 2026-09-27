@@ -7,7 +7,7 @@ export async function api(path, options = {}) {
   return body;
 }
 export const json = (method, body) => ({ method, body: JSON.stringify(body) });
-export const formatDistance = value => value < 1 ? `${Math.round(value * 1000)} m` : `${Math.round(value).toLocaleString()} km`;
+export const formatDistance = value => value == null ? 'No guess' : value < 1 ? `${Math.round(value * 1000)} m` : `${Math.round(value).toLocaleString()} km`;
 
 export async function preparePhoto(file) {
   if (file.size > 25 * 1024 * 1024) throw new Error(`${file.name} is too large. Please use a photo under 25 MB.`);

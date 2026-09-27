@@ -9,7 +9,8 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import { createStore } from './store.js';
-import { cleanText, coordinates, HttpError, publicGame, publicRun } from './game.js';
+import { cleanText, coordinates, gameSettings, HttpError, publicGame, publicRun, roundDeadline } from './game.js';
+import { expireLive, getLive, newLive, publicLive, updateLive } from './live.js';
 import { createLocationSearch } from './location-search.js';
 import { createAuthentication, SESSION_DURATION } from './auth.js';
 import { LIMITS } from './limits.js';
@@ -31,6 +32,10 @@ export function createApp({ store = createStore(), auth = createAuthentication()
   const authOrigin = auth.config.firebase ? `https://${auth.config.firebase.authDomain}` : null;
   const app = express();
   app.disable('x-powered-by');
+  app.use((req,res,next)=>{
+    if(/^\/(g(?:\/|$)|api(?:\/|$)|create(?:\/|$))/.test(req.path))res.set('X-Robots-Tag','noindex, nofollow, noarchive, noimageindex, nosnippet').set('Cache-Control','no-store');
+    next();
+  });
   app.set('trust proxy', 1);
   app.use(helmet({ contentSecurityPolicy: { directives: {
     defaultSrc: ["'self'"], scriptSrc: ["'self'", 'https://apis.google.com'], styleSrc: ["'self'", "'unsafe-inline'"],
@@ -38,7 +43,7 @@ export function createApp({ store = createStore(), auth = createAuthentication()
     fontSrc: ["'self'", 'data:'], connectSrc: ["'self'",'https://identitytoolkit.googleapis.com','https://securetoken.googleapis.com','https://www.googleapis.com',...(authOrigin?[authOrigin]:[])],
     frameSrc: ['https://accounts.google.com',...(authOrigin?[authOrigin]:[])],
     upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null,
-  } }, crossOriginOpenerPolicy:{policy:'same-origin-allow-popups'}, referrerPolicy: { policy: 'strict-origin-when-cross-origin' } }));
+  } }, crossOriginOpenerPolicy:{policy:'same-origin-allow-popups'}, referrerPolicy: { policy: 'strict-origin' } }));
   app.use(cookieParser());
   app.use(express.json({ limit: '32kb' }));
   const cookieOptions = { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', maxAge: 30 * 86400 * 1000, path: '/' };
@@ -66,7 +71,10 @@ export function createApp({ store = createStore(), auth = createAuthentication()
     }
     next();
   });
-  if (rateLimits) app.use('/api', rateLimit({ windowMs: 15 * 60 * 1000, limit: 500, standardHeaders: 'draft-8', legacyHeaders: false, message: { error: 'Too many requests. Please try again in a few minutes.' } }));
+  if (rateLimits) app.use('/api', rateLimit({ windowMs: 15 * 60 * 1000, limit: 500, keyGenerator:req=>req.playerId, standardHeaders: 'draft-8', legacyHeaders: false, message: { error: 'Too many requests. Please try again in a few minutes.' }, skip:req=>req.method==='GET' && /^\/games\/[^/]+\/live\/[^/]+$/.test(req.path) }));
+  // Each participant has a random HttpOnly browser identity. Keep live polling
+  // separate so a group sharing one Wi-Fi address does not exhaust its allowance.
+  const liveLimiter=rateLimits?rateLimit({windowMs:60_000,limit:45,keyGenerator:req=>req.playerId,standardHeaders:'draft-8',legacyHeaders:false}):(_q,_s,next)=>next();
   const requireCreator = (req,_res,next) => req.user ? next() : next(new HttpError(401,'Sign in with Google to create and manage your trips.'));
   const requireCsrf = (req,_res,next) => typeof req.get('x-csrf-token')==='string' && timingSafeEqual(Buffer.from(hash(req.get('x-csrf-token'))),Buffer.from(hash(req.csrfToken))) ? next() : next(new HttpError(403,'Please refresh the page and try again.'));
   const loginLimiter = rateLimits ? rateLimit({ windowMs: 15 * 60 * 1000, limit: 30, standardHeaders: 'draft-8', legacyHeaders: false, message: { error: 'Too many sign-in attempts. Please try again in 15 minutes.' } }) : (_req,_res,next)=>next();
@@ -91,13 +99,14 @@ export function createApp({ store = createStore(), auth = createAuthentication()
     try { meta = JSON.parse(req.body.metadata); } catch { throw new HttpError(400, 'The game details could not be read.'); }
     const title = cleanText(meta.title, 80, 'Trip title');
     const hostName = cleanText(meta.hostName, 30, 'Your name');
+    const settings=gameSettings(meta.settings);
     if (!req.files?.length || req.files.length > 12 || !Array.isArray(meta.photos) || req.files.length !== meta.photos.length) {
       throw new HttpError(400, 'Add between 1 and 12 photos, each with a location.');
     }
     const photos = meta.photos.map((p, i) => ({ ...coordinates(p), caption: typeof p.caption === 'string' ? p.caption.trim().slice(0,200) : '', key: `${i}.jpg` }));
-    const id = randomBytes(12).toString('base64url');
+    const id = randomBytes(16).toString('base64url');
     const ownerUid=req.user.uid;
-    await store.beginGame({id,title,hostName,photos,ownerUid,createdAt:Date.now()});
+    await store.beginGame({id,title,hostName,photos,ownerUid,settings,sharing:true,createdAt:Date.now()});
     let storageBytes=0;
     try {
       for (const [i, file] of req.files.entries()) {
@@ -108,7 +117,8 @@ export function createApp({ store = createStore(), auth = createAuthentication()
         storageBytes+=buffer.length;
         await store.savePhoto(id, `${i}.jpg`, buffer);
       }
-      const game = await store.publishGame(id,ownerUid,storageBytes);
+      let game = await store.publishGame(id,ownerUid,storageBytes);
+      if(settings.mode==='live')game=await store.mutateGame(id,g=>newLive(g));
       res.status(201).json(publicGame(game));
     } catch (e) {
       await store.deleteGame(id,ownerUid).catch(cleanup => console.error('Upload cleanup failed', cleanup.message));
@@ -120,32 +130,76 @@ export function createApp({ store = createStore(), auth = createAuthentication()
       if (!validId.test(id)) throw new HttpError(404, 'This trip could not be found. Check your invite link.');
       req.game = id === demo.id ? demo : await store.getGame(id);
       if (!req.game) throw new HttpError(404, 'This trip could not be found. It may have been deleted.');
+      if(req.game.sharing===false && req.user?.uid!==req.game.ownerUid)throw new HttpError(403,'The creator has paused sharing for this trip.');
       next();
     } catch(e) { next(e); }
   });
   app.get('/api/games/:gameId', async (req,res) => {
-    const run = await store.getRun(req.game.id, req.playerId);
+    let run = await store.getRun(req.game.id, req.playerId);
+    if(run && !run.completed && roundDeadline(req.game,run) && Date.now()>=roundDeadline(req.game,run))run=(await store.guess(req.game,req.playerId,{round:run.results.length,timedOut:true})).run;
+    if(publicGame(req.game).liveId)run=null;
     res.json({ game: publicGame(req.game), run: run ? publicRun(req.game, run) : null });
   });
   app.post('/api/games/:gameId/join', async (req,res) => {
+    if(publicGame(req.game).liveId)throw new HttpError(409,'Join the live lobby for this trip.');
     const name = cleanText(req.body?.name, 24, 'Your name');
-    const run = await store.join(req.game.id, req.playerId, name);
+    const run = await store.join(req.game.id, req.playerId, name, req.game);
     res.json(publicRun(req.game, run));
+  });
+  app.post('/api/games/:gameId/round',requireCsrf,async(req,res)=>{
+    if(publicGame(req.game).liveId)throw new HttpError(409,'Join the live lobby for this trip.');
+    res.json(publicRun(req.game,await store.startRound(req.game,req.playerId,req.body?.round)));
   });
   app.get('/api/games/:gameId/photos/:round', async (req,res) => {
     const round = Number(req.params.round);
     if (!Number.isInteger(round) || round < 0 || round >= req.game.photos.length) throw new HttpError(404, 'Photo not found.');
     const run = await store.getRun(req.game.id, req.playerId);
-    if (!(req.user && req.user.uid === req.game.ownerUid) && (!run || round > run.results.length)) throw new HttpError(403, 'Join the game and finish the earlier rounds first.');
-    const photo = req.game.photos[round];
+    if (!(req.user && req.user.uid === req.game.ownerUid) && (!run || round > run.results.length || (req.game.settings?.timeLimitSeconds && round===run.results.length && run.roundStartedAt===null))) throw new HttpError(403, 'Join the game and start this round first.');
+    if(publicGame(req.game).liveId && req.user?.uid!==req.game.ownerUid)throw new HttpError(403,'Use the live lobby to view this round.');
+    const photo = req.game.photos[run?.order?.[round] ?? round];
     const buffer = req.game.demo ? await fs.readFile(path.join(root, 'server', 'demo', photo.key)) : await store.getPhoto(req.game.id, photo.key);
-    res.type('jpeg').set('Cache-Control', 'private, max-age=3600').send(buffer);
+    res.type('jpeg').set('Cache-Control', 'private, no-store').send(buffer);
   });
   app.post('/api/games/:gameId/guess', async (req,res) => {
+    if(publicGame(req.game).liveId)throw new HttpError(409,'Submit your guess in the live lobby.');
     const { run, result } = await store.guess(req.game, req.playerId, req.body || {});
     res.json({ result, run: publicRun(req.game, run) });
   });
   app.get('/api/games/:gameId/leaderboard', async (req,res) => res.json(await store.leaderboard(req.game.id)));
+  app.patch('/api/games/:gameId/sharing',requireCreator,requireCsrf,async(req,res)=>{
+    if(typeof req.body?.enabled!=='boolean')throw new HttpError(400,'Choose whether sharing is enabled.');
+    const game=await store.mutateGame(req.game.id,g=>{
+      if(g.ownerUid!==req.user.uid)throw new HttpError(403,'This trip belongs to another creator.');
+      return {...g,sharing:req.body.enabled,...(!req.body.enabled && g.live?{live:{...g.live,phase:'finished'}}:{})};
+    });res.json(publicGame(game));
+  });
+  const liveActor=req=>({uid:req.user?.uid,playerId:req.playerId});
+  const checkedLive=(game,id)=>{if(game.sharing===false)throw new HttpError(403,'Sharing is paused. Re-enable it to use the live lobby.');getLive(game,id);};
+  app.post('/api/games/:gameId/live',requireCreator,requireCsrf,async(req,res)=>{
+    const game=await store.mutateGame(req.game.id,g=>{
+      if(g.ownerUid!==req.user.uid)throw new HttpError(403,'Only the trip creator can open a lobby.');
+      if(g.sharing===false)throw new HttpError(409,'Enable link sharing before opening a lobby.');
+      return newLive(g,req.body||{});
+    });res.json(publicLive(game,liveActor(req)));
+  });
+  app.get('/api/games/:gameId/live/:liveId',liveLimiter,async(req,res)=>{
+    checkedLive(req.game,req.params.liveId);
+    let game=req.game;
+    if(expireLive(game)!==game)game=await store.mutateGame(game.id,g=>{checkedLive(g,req.params.liveId);return expireLive(g);});
+    res.json(publicLive(game,liveActor(req)));
+  });
+  app.post('/api/games/:gameId/live/:liveId/:action',liveLimiter,requireCsrf,async(req,res)=>{
+    const game=await store.mutateGame(req.game.id,g=>{checkedLive(g,req.params.liveId);return updateLive(g,req.params.liveId,liveActor(req),req.params.action,req.body||{});});
+    res.json(publicLive(game,liveActor(req)));
+  });
+  app.get('/api/games/:gameId/live/:liveId/photos/:round',async(req,res)=>{
+    checkedLive(req.game,req.params.liveId);
+    const l=req.game.live, p=l.players[req.playerId], round=Number(req.params.round);
+    if((!p && req.user?.uid!==req.game.ownerUid) || l.phase==='lobby' || !Number.isInteger(round) || round<0 || round>l.round)throw new HttpError(403,'This photo is not available yet.');
+    const photo=req.game.photos[l.order[round]];
+    const buffer=await store.getPhoto(req.game.id,photo.key);
+    res.type('jpeg').set('Cache-Control','private, no-store').send(buffer);
+  });
   app.delete('/api/games/:gameId', requireCreator, requireCsrf, async (req,res) => {
     if (req.game.demo) throw new HttpError(400, 'The demo cannot be deleted.');
     if(req.game.ownerUid!==req.user.uid)throw new HttpError(403,'This trip belongs to another creator.');
@@ -153,6 +207,7 @@ export function createApp({ store = createStore(), auth = createAuthentication()
     res.json({ deleted: true });
   });
   app.use('/api', (_req,_res,next) => next(new HttpError(404, 'Endpoint not found.')));
+  app.get('/robots.txt',(_req,res)=>res.type('text/plain').send('User-agent: *\nAllow: /\n# Trip and API responses carry X-Robots-Tag: noindex. They must remain crawlable for it to work.\n'));
   app.use(express.static(path.join(root, 'dist'), { maxAge: '1h', index: false }));
   app.get('/{*path}', (_req,res) => res.sendFile(path.join(root, 'dist', 'index.html')));
   app.use((err,_req,res,_next) => {

@@ -2,7 +2,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { Firestore } from '@google-cloud/firestore';
 import { Storage } from '@google-cloud/storage';
-import { applyGuess, HttpError } from './game.js';
+import { applyGuess, beginRound, HttpError, newRun } from './game.js';
 import { reserveTrip, creatorUsage, expiredUploads } from './limits.js';
 
 const visible = game => game && (!game.status || game.status === 'ready') ? game : null;
@@ -33,6 +33,8 @@ export class LocalStore {
     return task;
   }
   async getGame(id) { return visible((await this.read()).games[id]); }
+  async mutateGame(id, fn) { return this.mutate(d=>{const game=visible(d.games[id]);if(!game)throw new HttpError(404,'This trip is no longer available.');return d.games[id]=fn(game);}); }
+  async startRound(game, playerId, round) { return this.mutate(d=>d.runs[`${game.id}:${playerId}`]=beginRound(d.runs[`${game.id}:${playerId}`],round)); }
   async cleanupUploads(uid) {
     const creator=(await this.read()).creators?.[uid];
     for(const id of expiredUploads(creator))await this.deleteGame(id,uid);
@@ -57,11 +59,11 @@ export class LocalStore {
     });
   }
   async listGames(uid) { await this.cleanupUploads(uid); return Object.values((await this.read()).games).filter(g => visible(g)&&g.ownerUid===uid&&!g.demo).sort((a,b) => b.createdAt - a.createdAt); }
-  async join(gameId, playerId, name) {
+  async join(gameId, playerId, name, game) {
     return this.mutate(d => {
       if(gameId!=='demo-trip'&&!visible(d.games[gameId]))throw new HttpError(404,'This trip is no longer available.');
       const key = `${gameId}:${playerId}`;
-      return d.runs[key] ||= { name, score: 0, results: [], completed: false, startedAt: Date.now(), gameId };
+      return d.runs[key] ||= newRun(game || d.games[gameId],name);
     });
   }
   async getRun(gameId, playerId) { return (await this.read()).runs[`${gameId}:${playerId}`] || null; }
@@ -110,6 +112,12 @@ export class CloudStore {
   creatorRef(uid) { return this.db.collection('creators').doc(uid); }
   runRef(id, playerId) { return this.gameRef(id).collection('runs').doc(playerId); }
   async getGame(id) { const s = await this.gameRef(id).get(); return visible(s.data()); }
+  async mutateGame(id, fn) {
+    return this.db.runTransaction(async t=>{const ref=this.gameRef(id),game=visible((await t.get(ref)).data());if(!game)throw new HttpError(404,'This trip is no longer available.');const updated=fn(game);if(updated!==game)t.set(ref,updated);return updated;});
+  }
+  async startRound(game, playerId, round) {
+    return this.db.runTransaction(async t=>{const ref=this.runRef(game.id,playerId),run=(await t.get(ref)).data(),updated=beginRound(run,round);if(updated!==run)t.set(ref,updated);return updated;});
+  }
   async cleanupUploads(uid) {
     const creator=(await this.creatorRef(uid).get()).data();
     for(const id of expiredUploads(creator))await this.deleteGame(id,uid);
@@ -137,13 +145,13 @@ export class CloudStore {
     });
   }
   async listGames(uid) { await this.cleanupUploads(uid); return (await this.db.collection('games').where('ownerUid','==',uid).get()).docs.map(d=>d.data()).filter(g=>visible(g)&&!g.demo).sort((a,b)=>b.createdAt-a.createdAt); }
-  async join(gameId, playerId, name) {
+  async join(gameId, playerId, name, game) {
     const ref = this.runRef(gameId, playerId);
     return this.db.runTransaction(async t => {
       if(gameId!=='demo-trip'&&!visible((await t.get(this.gameRef(gameId))).data()))throw new HttpError(404,'This trip is no longer available.');
       const old = await t.get(ref);
       if (old.exists) return old.data();
-      const run = { name, score: 0, results: [], completed: false, startedAt: Date.now(), gameId };
+      const run = newRun(game,name);
       t.create(ref, run);
       return run;
     });

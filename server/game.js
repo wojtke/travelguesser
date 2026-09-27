@@ -26,29 +26,54 @@ export function distanceKm(a, b) {
 
 export function scoreGuess(distance) { return Math.round(5000 * Math.exp(-distance / 1500)); }
 
-export function applyGuess(game, run, input) {
-  const guess = coordinates(input);
+export const ROUND_TIMES = [0, 15, 30, 60, 90, 120, 180, 300];
+export function gameSettings(value = {}) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new HttpError(400, 'Invalid game settings.');
+  const settings = { mode: value.mode ?? 'solo', timeLimitSeconds: value.timeLimitSeconds ?? 0, shufflePhotos: value.shufflePhotos ?? false };
+  if (!['solo','live'].includes(settings.mode) || !ROUND_TIMES.includes(settings.timeLimitSeconds) || typeof settings.shufflePhotos !== 'boolean') throw new HttpError(400, 'Choose a valid game mode, timer, and photo order.');
+  return settings;
+}
+export function photoOrder(game, shuffled = game.settings?.shufflePhotos) {
+  const order = game.photos.map((_,i)=>i);
+  if (shuffled) for(let i=order.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[order[i],order[j]]=[order[j],order[i]];}
+  return order;
+}
+export function newRun(game, name, now=Date.now()) {
+  return {name,score:0,results:[],completed:false,startedAt:now,gameId:game.id,order:photoOrder(game),roundStartedAt:now};
+}
+export function roundDeadline(game, run) { return game.settings?.timeLimitSeconds && run.roundStartedAt ? run.roundStartedAt + game.settings.timeLimitSeconds*1000 : null; }
+export function beginRound(run, round, now=Date.now()) {
+  if(!run)throw new HttpError(403,'Join this game first.');
+  if(round!==run.results.length)throw new HttpError(409,'Refresh to continue the current round.');
+  return !run.completed && run.roundStartedAt===null ? {...run,roundStartedAt:now} : run;
+}
+export function applyGuess(game, run, input, now=Date.now()) {
   if (!Number.isInteger(input.round) || input.round < 0 || input.round >= game.photos.length) {
     throw new HttpError(400, 'Invalid round.');
   }
   // A retried request returns the original result, and can never replace a guess.
   if (input.round < run.results.length) return { run, result: run.results[input.round] };
   if (input.round !== run.results.length) throw new HttpError(409, 'Finish the current round first.');
-  const photo = game.photos[input.round];
+  if(game.settings?.timeLimitSeconds && run.roundStartedAt===null)throw new HttpError(409,'Start the next round first.');
+  const expired = roundDeadline(game,run) !== null && now >= roundDeadline(game,run);
+  if(input.timedOut && !expired)throw new HttpError(409,'The round is still running.');
+  const guess = expired ? null : coordinates(input);
+  const photo = game.photos[run.order?.[input.round] ?? input.round];
   const actual = { lat: photo.lat, lng: photo.lng };
-  const distance = distanceKm(guess, actual);
-  const result = { round: input.round, guess, actual, distance, score: scoreGuess(distance), caption: photo.caption || '' };
+  const distance = guess ? distanceKm(guess, actual) : null;
+  const result = { round: input.round, guess, actual, distance, score: guess ? scoreGuess(distance) : 0, timedOut:expired, caption: photo.caption || '' };
   const results = [...run.results, result];
-  const updated = { ...run, results, score: run.score + result.score, completed: results.length === game.photos.length };
-  if (updated.completed) updated.finishedAt = Date.now();
+  const updated = { ...run, results, score: run.score + result.score, completed: results.length === game.photos.length, roundStartedAt:null };
+  if (updated.completed) updated.finishedAt = now;
   return { run: updated, result };
 }
 
 export function publicGame(game) {
-  return { id: game.id, title: game.title, hostName: game.hostName, rounds: game.photos.length, createdAt: game.createdAt, demo: !!game.demo };
+  return { id: game.id, title: game.title, hostName: game.hostName, rounds: game.photos.length, createdAt: game.createdAt, demo: !!game.demo, settings:gameSettings(game.settings), sharing:game.sharing !== false,
+    liveId:game.live && game.live.phase!=='finished' && game.live.expiresAt>Date.now() ? game.live.id : null };
 }
 
 export function publicRun(game, run) {
-  return { name: run.name, score: run.score, results: run.results, completed: run.completed, round: run.results.length,
+  return { name: run.name, score: run.score, results: run.results, completed: run.completed, round: run.results.length, deadline:roundDeadline(game,run), serverNow:Date.now(), awaitingNext:!!game.settings?.timeLimitSeconds && run.roundStartedAt===null && !run.completed,
     photoUrl: run.completed ? null : `/api/games/${game.id}/photos/${run.results.length}` };
 }

@@ -4,7 +4,22 @@ A photo guessing game for friends. Upload 1–12 trip photos, confirm their loca
 
 [Play the live app](https://tripguessr.com) · [Try the demo](https://tripguessr.com/g/demo-trip)
 
-GPS-tagged photos are located automatically. For other photos, search for a city, landmark, or address and choose a result to place the pin. You can adjust the pin on the map before publishing. Maps support dragging and scroll-wheel zoom. During a round, the photo fills the screen: scroll or use the photo controls to zoom, drag to pan, and use the overlaid map to guess. The map expands on hover or focus, with a size toggle for touch screens. Press Space to confirm a placed pin (the shortcut stays inactive while typing).
+GPS-tagged photos are located automatically. For other photos, search for a city, landmark, or address and choose a result to place the pin. You can adjust the pin on the map before publishing. Maps support dragging and scroll-wheel zoom. During a round, the photo fills the screen: scroll or use the photo controls to zoom, drag to pan, and use the overlaid map to guess. The desktop map expands on hover or focus. On phones it starts hidden; **Open map** and **Back to photo** switch between the map drawer and the unobstructed photo while preserving your pin. Press Space to confirm a placed pin (the shortcut stays inactive while typing).
+
+## Game options and live sessions
+
+Choose independent play or a live lobby when creating a trip. Set a per-photo timer (15 seconds to 5 minutes, or unlimited) and optionally shuffle the photos. In My trips, **Host live** also starts a lobby for an existing trip. Friends join with nicknames; the host starts each round. Everyone sees the same photo, guesses remain hidden until everyone submits or time expires, and a map/table shows each player’s distance and score. The host then starts the next round. Up to 20 players can join; the host can spectate, remove absent players or reveal early.
+
+Live sessions use the existing Firestore database and server, with three-second polling while the tab is visible. There is no extra always-on server. Lobby links expire after 24 hours; this is an access expiry, not automatic data deletion. Only one live lobby is current per trip. `/g/<trip-id>` directs players to an active lobby; after it ends, that trip link supports independent play again. Existing solo results are retained.
+
+## Privacy and operating costs
+
+Trips are **link-only**, with no public directory. New links have 128 bits of randomness. Trip pages/API/photos carry noindex headers, private responses are not cached, and the owner can **Pause sharing** or delete the trip. Anyone with a link can forward it or save content; noindex is not authentication or guaranteed secrecy.
+
+[Privacy notice](https://tripguessr.com/privacy) · [Terms](https://tripguessr.com/terms) · [Cookies](https://tripguessr.com/cookies)
+
+- [Costs, free tiers, service limits and traffic estimates](docs/COSTS-AND-LIMITS.md)
+- [Privacy controls, retention and request handling](docs/PRIVACY-OPERATIONS.md)
 
 ## Run locally
 
@@ -22,7 +37,7 @@ Open <http://localhost:8080>, click **Create a trip**, then **Continue locally**
 npm test
 ```
 
-The integration tests cover Google identity validation, CSRF protection, session expiry, owner isolation, concurrent upload quotas, interrupted upload cleanup, answer hiding, metadata stripping, scoring, persistence, and the demo.
+The integration tests cover Google identity validation, CSRF protection, session expiry, owner isolation, concurrent upload quotas, interrupted upload cleanup, answer hiding, metadata stripping, scoring, persistence, the demo, live-round synchronization, simultaneous/duplicate guesses, server-side timers, host authorization, photo progression and paused sharing.
 
 ## Deploy to Google Cloud
 
@@ -79,7 +94,7 @@ The Worker also forwards `/__/auth/*` and `/__/firebase/init.json` to the existi
 ## Accounts, data, and limits
 
 - Creators sign in with Google; Firebase Authentication stores their identity and last sign-in metadata. The app uses a five-day Secure, HttpOnly session cookie and does not store passwords or Google access tokens.
-- Firestore stores trips, an owner UID and quota slots for each creator, and anonymous player runs/leaderboards. It does not duplicate email addresses or build a separate login-history database. Cloud Run is the only application client allowed to access it.
+- Firestore stores trips, an owner UID and quota slots for each creator, anonymous player runs/leaderboards, and one bounded live-session state per trip. It does not duplicate email addresses or build a separate login-history database. Cloud Run is the only application client allowed to access it.
 - Each creator can keep **5 active trips**, with **12 photos per trip** and at most **2 MiB per stored photo** (up to 120 MiB of current photos per creator). Upload slots are reserved transactionally before image processing; failed uploads are removed, and interrupted uploads/deletes are retried when the creator returns. Deleting a trip frees its slot after its photos are removed.
 - Limits and request throttling reduce casual abuse; they are not a hard spending cap or a guarantee against many-account abuse. There is no automatic expiry of published trips. Cloud Storage soft-deleted objects may remain billable during the bucket’s retention period.
 - There is no public trip directory. Anyone with a trip link can join; Google login is needed only for creating and managing trips.
@@ -100,10 +115,10 @@ Legacy host keys no longer grant access. The deployment removes the old `HOST_KE
 - GPS is read from original EXIF data in the browser. Photos without GPS need a map pin or coordinates. Review all locations before publishing.
 - Hosts can search place names and addresses through Photon, select a result to locate a photo, then adjust the map pin. Searches happen on button click or Enter, with caching, bounded queues, request spacing, timeouts, and host-only access. The public Photon service has no availability guarantee; maps and coordinate entry remain usable during search outages. Set `GEOCODING_URL` to a different Photon-compatible service if needed.
 - The browser resizes photos; the server decodes, rotates, resizes, and re-encodes them again. EXIF and other metadata are removed. Original filenames and originals are not stored.
-- Each correct location and reveal caption stays on the server until that round's guess is committed. Completed rounds cannot be changed. Firestore transactions protect scoring from concurrent submissions.
+- Each correct location and reveal caption stays on the server until the solo guess is committed or the shared live round is revealed. Completed rounds cannot be changed. Firestore transactions protect scoring from concurrent submissions.
 - Scores use `round(5000 × exp(-distanceKm / 1500))`; 5,000 points for an exact guess. Distance uses the haversine formula.
 - A secure, HttpOnly browser cookie identifies each friend. Closing/reopening the page resumes the game. Clearing cookies or changing devices starts a new entry. This is a friendly game, not a cheat-proof competition.
-- There is no public trip directory. Anyone with a trip link can play and see its photos; share links only with intended friends. Hosts can delete trips and their leaderboards.
+- There is no public trip directory. Anyone with a trip link can play and see its photos; share links only with intended friends. Hosts can pause link access or delete trips and their leaderboards.
 - No Google Maps key, email delivery setup, or player accounts are required. OpenStreetMap tiles require internet access. In-memory request limits apply per server instance.
 
 ## Reference and asset credits
