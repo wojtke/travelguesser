@@ -1,6 +1,8 @@
 # Privacy operations
 
-Operator: **Wojciech Jasiński, Poland — woj.jasinski@gmail.com**. Reviewed for this implementation on 27 September 2026. Public notices live at `/privacy`, `/terms` and `/cookies`.
+Operator: **Wojciech Jasiński, Poland**. Reviewed for this implementation on 27 September 2026. Public notices live at `/privacy`, `/terms` and `/cookies`.
+
+The operator's personal email has been removed from the site and current documentation at their request. No replacement public support address or contact form is configured. A working private contact route for privacy requests and content reports remains an outstanding operating requirement; do not treat the notices alone as complete compliance. Google Auth's support address is configured separately and needs a valid replacement before it can be changed.
 
 This release implements a privacy baseline. Publishing a notice alone does not establish compliance with every applicable law. The operator still needs to handle requests/reports, maintain appropriate vendor arrangements and review changes in how the service is used.
 
@@ -32,7 +34,7 @@ The domain proxy does not intentionally record bodies, credentials or photo cont
 
 ## Handling a privacy or content request
 
-1. Receive requests at the listed operator email. Acknowledge promptly and track the request date. [EDPB guidance](https://www.edpb.europa.eu/sme/be-compliant/respect-individuals-rights_en) explains applicable rights and response expectations; normally respond within one month.
+1. When a request is received, acknowledge promptly and track the request date. A public contact route still needs to be configured as noted above. [EDPB guidance](https://www.edpb.europa.eu/sme/be-compliant/respect-individuals-rights_en) explains applicable rights and response expectations; normally respond within one month.
 2. Verify identity proportionately. A creator can use the account email plus authenticated context; an anonymous player may need trip/nickname/browser context. Do **not** ask for passwords, Google tokens or session cookies by email. Do not disclose another participant's data in an export.
 3. For a creator export, retrieve their Firebase profile and games selected by `ownerUid`, with their photo objects and relevant account quota record. For a player export/correction/deletion, locate only the verified player's hashed run identifier/live entry. Use operator access through `scripts/admin-cloud.mjs`; no new runtime account-admin permissions are needed.
 4. For account deletion, delete that creator's owned trips through the normal store deletion path first (media, runs, leaderboard, quota slots), remove the creator quota document, then delete the Firebase user and revoke sessions. Review any operator backups/support copies. Deleting only the Firebase login leaves trips behind and is insufficient.
