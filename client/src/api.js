@@ -1,7 +1,9 @@
+let csrfToken = '';
 export async function api(path, options = {}) {
-  const response = await fetch(`/api${path}`, { ...options, headers: { ...(options.body && !(options.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}), ...options.headers } });
+  const response = await fetch(`/api${path}`, { ...options, headers: { ...(options.body && !(options.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}), ...(csrfToken ? {'X-CSRF-Token':csrfToken}:{}), ...options.headers } });
   const body = await response.json().catch(() => ({ error: 'The server could not be reached. Please try again.' }));
-  if (!response.ok) throw new Error(body.error || 'Something went wrong.');
+  if(body.csrfToken)csrfToken=body.csrfToken;
+  if (!response.ok) { const error=new Error(body.error || 'Something went wrong.');error.status=response.status;throw error; }
   return body;
 }
 export const json = (method, body) => ({ method, body: JSON.stringify(body) });

@@ -6,3 +6,4 @@ dist/
 .deployment-private.json
 .DS_Store
 test-results/
+firebase-debug*.log

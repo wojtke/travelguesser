@@ -7,14 +7,15 @@ import request from 'supertest';
 import sharp from 'sharp';
 import { createApp } from '../server/app.js';
 import { LocalStore } from '../server/store.js';
+import { signIn, testAuthentication } from './helpers.js';
 import { distanceKm, scoreGuess } from '../server/game.js';
 
 let directory, store, app, photo;
-const hostKey='test-only-secret-key';
+const auth=testAuthentication();
 before(async()=>{
   directory=await mkdtemp(path.join(os.tmpdir(),'travelguesser-test-'));
   store=new LocalStore(directory);
-  app=createApp({store,hostKey,rateLimits:false});
+  app=createApp({store,auth,rateLimits:false});
   photo=await sharp({create:{width:100,height:80,channels:3,background:'#6688aa'}})
     .withExif({IFD0:{ImageDescription:'SPOILER: Paris'}}).jpeg().toBuffer();
 });
@@ -22,7 +23,7 @@ after(async()=>{await rm(directory,{recursive:true,force:true});});
 
 async function makeTrip() {
   const host=request.agent(app);
-  await host.post('/api/host/session').send({key:hostKey}).expect(200);
+  await signIn(host);
   const data={title:'Test adventure',hostName:'Test host',photos:[{lat:48.8584,lng:2.2945,caption:'The reveal'},{lat:0,lng:0,caption:'At sea'}]};
   const response=await host.post('/api/games').field('metadata',JSON.stringify(data)).attach('photos',photo,'secret-location.jpg').attach('photos',photo,'another-location.jpg').expect(201);
   return {host,id:response.body.id};
@@ -36,11 +37,12 @@ test('geographic scoring handles exact guesses, antipodes, and the date line',()
   assert.ok(scoreGuess(10)>scoreGuess(100));
 });
 
-test('uploading and administration require a host key; cross-site writes fail',async()=>{
+test('uploading and administration require creator sign-in; cross-site writes fail',async()=>{
   await request(app).post('/api/games').expect(401);
   await request(app).get('/api/host/games').expect(401);
-  await request(app).post('/api/host/session').send({key:'wrong-key'}).expect(401);
-  await request(app).post('/api/host/session').set('Origin','https://evil.example').send({key:hostKey}).expect(403);
+  await request(app).post('/api/host/session').send({key:'retired-host-key'}).expect(404);
+  await request(app).post('/api/auth/session').set('Origin','https://evil.example').send({idToken:'creator-a'}).expect(403);
+  await request(app).post('/api/auth/session').set('Origin','malformed').send({idToken:'creator-a'}).expect(403);
   const {id}=await makeTrip();
   await request(app).delete(`/api/games/${id}`).expect(401);
 });
@@ -93,7 +95,7 @@ test('complete game hides answers, strips metadata, persists results, and scores
 
 test('invalid game metadata and non-images are rejected without publishing a game',async()=>{
   const host=request.agent(app);
-  await host.post('/api/host/session').send({key:hostKey});
+  await signIn(host);
   await host.post('/api/games').field('metadata','not json').attach('photos',photo,'a.jpg').expect(400);
   const meta={title:'Bad',hostName:'Host',photos:[{lat:0,lng:0}]};
   await host.post('/api/games').field('metadata',JSON.stringify(meta)).attach('photos',Buffer.from('not an image'),'a.jpg').expect(400);

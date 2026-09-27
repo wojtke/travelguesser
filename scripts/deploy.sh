@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Usage: PROJECT_ID=your-project BILLING_ACCOUNT=xxxxxx-xxxxxx-xxxxxx bash scripts/deploy.sh
+# Usage: PROJECT_ID=your-project BILLING_ACCOUNT=... SUPPORT_EMAIL=... bash scripts/deploy.sh
 # Existing resources are reused. Every gcloud command explicitly selects the project.
 PROJECT_ID="${PROJECT_ID:?Set PROJECT_ID to your Google Cloud project ID}"
 REGION="${REGION:-europe-central2}"
@@ -22,7 +22,8 @@ if [[ "$LINKED_BILLING" != "billingAccounts/${BILLING_ACCOUNT}" ]]; then
   gcloud billing projects link "$PROJECT_ID" --billing-account="$BILLING_ACCOUNT" --quiet
 fi
 gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com \
-  firestore.googleapis.com storage.googleapis.com secretmanager.googleapis.com iam.googleapis.com \
+  firestore.googleapis.com storage.googleapis.com iam.googleapis.com \
+  firebase.googleapis.com identitytoolkit.googleapis.com apikeys.googleapis.com firebaserules.googleapis.com \
   --project="$PROJECT_ID" --quiet
 
 gcloud firestore databases describe --database='(default)' --project="$PROJECT_ID" >/dev/null 2>&1 ||
@@ -38,29 +39,29 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" --member="serviceAccount:${
 gcloud storage buckets add-iam-policy-binding "gs://${BUCKET}" --member="serviceAccount:${RUNTIME_SA}" --role=roles/storage.objectUser --project="$PROJECT_ID" --quiet >/dev/null
 gcloud projects add-iam-policy-binding "$PROJECT_ID" --member="serviceAccount:${BUILD_SA}" --role=roles/run.builder --condition=None --quiet >/dev/null
 
-mkdir -p .local
-chmod 700 .local
-if ! gcloud secrets describe host-key --project="$PROJECT_ID" >/dev/null 2>&1; then
-  node --input-type=module -e 'import{randomBytes}from"node:crypto";import{writeFileSync}from"node:fs";writeFileSync(".local/host-key.txt",randomBytes(32).toString("base64url"),{mode:0o600});'
-  gcloud secrets create host-key --data-file=.local/host-key.txt --replication-policy=automatic --project="$PROJECT_ID" --quiet
-fi
-gcloud secrets add-iam-policy-binding host-key --member="serviceAccount:${RUNTIME_SA}" --role=roles/secretmanager.secretAccessor --project="$PROJECT_ID" --quiet >/dev/null
+gcloud iam roles describe travelguesserSessionManager --project="$PROJECT_ID" >/dev/null 2>&1 ||
+  gcloud iam roles create travelguesserSessionManager --project="$PROJECT_ID" \
+  --title='TravelGuesser session manager' --permissions=firebaseauth.users.get,firebaseauth.users.createSession --stage=GA --quiet
+gcloud projects add-iam-policy-binding "$PROJECT_ID" --member="serviceAccount:${RUNTIME_SA}" \
+  --role="projects/${PROJECT_ID}/roles/travelguesserSessionManager" --condition=None --quiet >/dev/null
+
+export PROJECT_ID
+node scripts/configure-auth.mjs
+node --input-type=module - <<'JS'
+import {spawnSync} from 'node:child_process';
+import {accessToken} from './scripts/admin-cloud.mjs';
+const result=spawnSync('npm',['exec','--yes','--package=firebase-tools@15.31.0','--','firebase','deploy','--only','firestore:rules','--project',process.env.PROJECT_ID,'--non-interactive'],{env:{...process.env,FIREBASE_TOKEN:accessToken(),GOOGLE_CLOUD_QUOTA_PROJECT:process.env.PROJECT_ID},stdio:'inherit'});
+process.exitCode=result.status;
+JS
 
 gcloud run deploy "$SERVICE" --source=. --region="$REGION" --project="$PROJECT_ID" \
   --service-account="$RUNTIME_SA" \
   --build-service-account="projects/${PROJECT_ID}/serviceAccounts/${BUILD_SA}" \
-  --set-env-vars="DATA_BACKEND=gcp,GOOGLE_CLOUD_PROJECT=${PROJECT_ID},PHOTO_BUCKET=${BUCKET}" \
-  --set-secrets=HOST_KEY=host-key:latest \
+  --env-vars-file=.local/runtime-env.json --remove-secrets=HOST_KEY \
   --allow-unauthenticated --port=8080 --memory=1Gi --cpu=1 --concurrency=4 \
-  --min-instances=0 --max-instances=2 --timeout=60 --cpu-throttling --quiet
+  --min-instances=0 --max-instances=2 --max=2 --timeout=60 --cpu-throttling --quiet
 
 gcloud run services describe "$SERVICE" --region="$REGION" --project="$PROJECT_ID" --format='value(status.url)' > .local/service-url.txt
-gcloud secrets versions access latest --secret=host-key --project="$PROJECT_ID" > .local/host-key.txt
-chmod 600 .local/host-key.txt
-node --input-type=module - <<'JS'
-import {readFileSync,writeFileSync} from 'node:fs';
-const url=readFileSync('.local/service-url.txt','utf8').trim();
-const key=readFileSync('.local/host-key.txt','utf8').trim();
-writeFileSync('.local/host-access.md',`# TravelGuesser host access\n\n[Open your private host link](${url}/create#host=${key})\n\nKeep this link private. It grants access to create and delete trips.\nShare each trip’s invite link with your friends instead.\n\nHost key: \`${key}\`\n`,{mode:0o600});
-console.log(`TravelGuesser is live at ${url}\nPrivate host link saved to .local/host-access.md`);
-JS
+SERVICE_URL="$(cat .local/service-url.txt)"
+node scripts/configure-auth.mjs --domains "$SERVICE_URL"
+echo "TravelGuesser is live at ${SERVICE_URL}. Anyone can sign in with Google to create trips."

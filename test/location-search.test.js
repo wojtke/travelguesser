@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import request from 'supertest';
 import { createLocationSearch, normalizePlaces } from '../server/location-search.js';
 import { createApp } from '../server/app.js';
+import {signIn,testAuthentication} from './helpers.js';
 
 const feature = {type:'Feature',geometry:{type:'Point',coordinates:[2.2945,48.8584]},properties:{osm_type:'W',osm_id:123,name:'Eiffel Tower',city:'Paris',country:'France',extent:[2.29,48.86,2.30,48.85]}};
 const response = () => ({ok:true,json:async()=>({features:[feature]})});
@@ -38,10 +39,10 @@ test('invalid queries never reach the geocoder, and failures return a useful err
 
 test('location search is restricted to hosts and passes results through the API',async()=>{
   const search=createLocationSearch({intervalMs:0,fetchImpl:async()=>response()});
-  const app=createApp({hostKey:'search-test-key',rateLimits:false,searchLocations:search});
+  const app=createApp({auth:testAuthentication(),rateLimits:false,searchLocations:search});
   await request(app).post('/api/host/locations/search').send({query:'Paris'}).expect(401);
   const host=request.agent(app);
-  await host.post('/api/host/session').send({key:'search-test-key'}).expect(200);
+  await signIn(host);
   await host.post('/api/host/locations/search').send({query:'x'}).expect(400);
   const result=await host.post('/api/host/locations/search').send({query:'Eiffel Tower'}).expect(200);
   assert.equal(result.body.places[0].name,'Eiffel Tower');
