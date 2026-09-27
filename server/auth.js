@@ -45,7 +45,7 @@ export function createAuthentication() {
     config:{provider:'local'},
     async createSession(token) {
       if (token !== 'local-development') throw new HttpError(401,'Use the local development sign-in.');
-      const user={uid:'local-developer',name:'Local explorer',email:''}, cookie=randomBytes(32).toString('hex');
+      const user={uid:'local-developer',name:'Local developer',email:''}, cookie=randomBytes(32).toString('hex');
       sessions.set(cookie,{user,expires:Date.now()+SESSION_DURATION});
       return {cookie,user};
     },

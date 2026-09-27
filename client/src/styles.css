@@ -19,3 +19,7 @@
 @media(max-width:1000px){.site-header nav .how-link{display:none}.header-inner{gap:14px}.site-header nav{gap:15px}.account-label strong{max-width:120px}}
 @media(max-width:600px){.site-header{height:auto;min-height:76px}.header-inner{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 12px;padding:13px 20px}.header-inner>.brand{grid-column:1;grid-row:1}.header-account{grid-column:2;grid-row:1}.site-header nav{grid-column:1/-1;grid-row:2;justify-self:end;margin-left:0}.site-header .button{margin-left:0}.account-trigger{padding:5px 6px;gap:6px;min-height:42px}.account-avatar{width:26px;height:26px;font-size:9px}.account-label small{font-size:8px}.account-label strong{max-width:91px;font-size:10px}.account-trigger>svg{width:12px}.site-header .header-signin{min-height:40px;font-size:11px;padding:10px 13px}.site-header .header-signin svg{width:15px}}
 @media(max-width:360px){.header-inner{padding-left:14px;padding-right:14px;column-gap:8px}.account-label strong{max-width:60px}.account-trigger>svg{display:none}}
+
+/* Keep photos framed after removing decorative captions and text overlays. */
+.postcard{padding-bottom:12px}.join-art>img{filter:none}
+@media(max-width:800px){.postcard{padding-bottom:9px}}

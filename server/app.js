@@ -19,9 +19,9 @@ const hash = v => createHash('sha256').update(v).digest('hex');
 const safeOrigin=(origin,host)=>{try{return new URL(origin).host===host;}catch{return false;}};
 const validId = /^[a-zA-Z0-9_-]{8,40}$/;
 const demo = {
-  id: 'demo-trip', title: 'A little world tour', hostName: 'TravelGuesser', demo: true, createdAt: 0,
+  id: 'demo-trip', title: 'World landmarks', hostName: 'TravelGuesser', demo: true, createdAt: 0,
   photos: [
-    { key: 'demo-paris.jpg', lat: 48.8584, lng: 2.2945, caption: 'The Eiffel Tower, Paris. A classic for a reason.' },
+    { key: 'demo-paris.jpg', lat: 48.8584, lng: 2.2945, caption: 'The Eiffel Tower, Paris.' },
     { key: 'demo-sydney.jpg', lat: -33.8568, lng: 151.2153, caption: 'The Sydney Opera House, right on the harbour.' },
     { key: 'demo-sanfrancisco.jpg', lat: 37.8199, lng: -122.4783, caption: 'The Golden Gate Bridge, San Francisco.' },
   ],
@@ -66,7 +66,7 @@ export function createApp({ store = createStore(), auth = createAuthentication()
     }
     next();
   });
-  if (rateLimits) app.use('/api', rateLimit({ windowMs: 15 * 60 * 1000, limit: 500, standardHeaders: 'draft-8', legacyHeaders: false, message: { error: 'A lot of exploring! Please try again in a few minutes.' } }));
+  if (rateLimits) app.use('/api', rateLimit({ windowMs: 15 * 60 * 1000, limit: 500, standardHeaders: 'draft-8', legacyHeaders: false, message: { error: 'Too many requests. Please try again in a few minutes.' } }));
   const requireCreator = (req,_res,next) => req.user ? next() : next(new HttpError(401,'Sign in with Google to create and manage your trips.'));
   const requireCsrf = (req,_res,next) => typeof req.get('x-csrf-token')==='string' && timingSafeEqual(Buffer.from(hash(req.get('x-csrf-token'))),Buffer.from(hash(req.csrfToken))) ? next() : next(new HttpError(403,'Please refresh the page and try again.'));
   const loginLimiter = rateLimits ? rateLimit({ windowMs: 15 * 60 * 1000, limit: 30, standardHeaders: 'draft-8', legacyHeaders: false, message: { error: 'Too many sign-in attempts. Please try again in 15 minutes.' } }) : (_req,_res,next)=>next();

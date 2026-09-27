@@ -46,11 +46,11 @@ export default function PhotoViewer({ src, alt }) {
       <div className="photo-canvas" style={{width:`${zoom*100}%`,height:`${zoom*100}%`}}><img src={src} alt={alt} draggable={false}/></div>
     </div>
     <div className="photo-tools" aria-label="Photo zoom controls">
-      <button type="button" className="photo-closer" aria-label="Look a little closer" onClick={()=>zoomTo(scale.current===1?2:scale.current*1.25)} disabled={zoom>=4}><ZoomIn size={17}/><span>Look a little closer</span></button>
+      <button type="button" className="photo-closer" aria-label="Zoom in" onClick={()=>zoomTo(scale.current===1?2:scale.current*1.25)} disabled={zoom>=4}><ZoomIn size={17}/><span>Zoom in</span></button>
       <span className="photo-zoom-value" aria-live="polite">{Math.round(zoom*100)}%</span>
       <button type="button" aria-label="Zoom out of photo" onClick={()=>zoomTo(scale.current*.8)} disabled={zoom<=1}><ZoomOut size={18}/></button>
       <button type="button" aria-label="Fit whole photo" onClick={()=>zoomTo(1)} disabled={zoom<=1}><Scan size={18}/></button>
     </div>
-    <p className="photo-help">Scroll to zoom · Drag to explore</p>
+    <p className="photo-help">Scroll to zoom · Drag to pan</p>
   </section>;
 }
