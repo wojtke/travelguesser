@@ -42,4 +42,4 @@ if(process.argv.includes('--domains')){
   await request(`${authUrl}?updateMask=authorizedDomains,signIn.anonymous.enabled,signIn.email.enabled`,'PATCH',{authorizedDomains:[...new Set([...current.authorizedDomains,'localhost','127.0.0.1'])],signIn:{anonymous:{enabled:false},email:{enabled:false}}});
 }
 const config=JSON.parse(await readFile('.local/firebase-config.json','utf8'));
-await writeFile('.local/runtime-env.json',JSON.stringify({DATA_BACKEND:'gcp',GOOGLE_CLOUD_PROJECT:project,PHOTO_BUCKET:process.env.PHOTO_BUCKET||`${project}-photos`,FIREBASE_API_KEY:config.apiKey,FIREBASE_AUTH_DOMAIN:config.authDomain,FIREBASE_APP_ID:config.appId}),{mode:0o600});
+await writeFile('.local/runtime-env.json',JSON.stringify({DATA_BACKEND:'gcp',GOOGLE_CLOUD_PROJECT:project,PHOTO_BUCKET:process.env.PHOTO_BUCKET||`${project}-photos`,FIREBASE_API_KEY:config.apiKey,FIREBASE_AUTH_DOMAIN:process.env.FIREBASE_AUTH_DOMAIN||config.authDomain,FIREBASE_APP_ID:config.appId}),{mode:0o600});

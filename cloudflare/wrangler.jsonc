@@ -1,0 +1,12 @@
+{
+  "name": "tripguessr-proxy",
+  "main": "worker.js",
+  "compatibility_date": "2026-09-27",
+  "workers_dev": true,
+  "preview_urls": false,
+  "routes": [
+    { "pattern": "tripguessr.com", "custom_domain": true },
+    { "pattern": "www.tripguessr.com", "custom_domain": true }
+  ],
+  "observability": { "enabled": true }
+}

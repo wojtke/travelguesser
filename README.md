@@ -2,7 +2,7 @@
 
 A photo guessing game for friends. Upload 1–12 trip photos, confirm their locations, and share an unlisted trip link. Friends enter a nickname, pin their guesses on a map, and compare distance-based scores.
 
-[Play the live app](https://travelguesser-ysll6guxmq-lm.a.run.app) · [Try the demo](https://travelguesser-ysll6guxmq-lm.a.run.app/g/demo-trip)
+[Play the live app](https://tripguessr.com) · [Try the demo](https://tripguessr.com/g/demo-trip)
 
 GPS-tagged photos are located automatically. For other photos, search for a city, landmark, or address and choose a result to place the pin. You can adjust the pin on the map before publishing. Maps support dragging and scroll-wheel zoom. During a round, the photo fills the screen: scroll or use the photo controls to zoom, drag to pan, and use the overlaid map to guess. The map expands on hover or focus, with a size toggle for touch screens. Press Space to confirm a placed pin (the shortcut stays inactive while typing).
 
@@ -40,7 +40,7 @@ You need project creation, billing linking, and resource/IAM administration perm
 
 After deployment, `.local/service-url.txt` contains the public app URL. Anyone with a Google account can create trips. Each account can list and delete only its own trips. Friends receive `/g/<trip-id>` links and play without signing in. Firebase configuration and operator backups are saved in ignored `.local/` files. The browser Firebase API key is public client configuration, not a server credential; data access is protected by backend authorization and Firestore rules.
 
-If you add a custom domain later, add it to Google sign-in’s allowed domains:
+If you add a custom domain, add it to Google sign-in’s allowed domains:
 
 ```sh
 PROJECT_ID=your-project-id node scripts/configure-auth.mjs --domains https://your-domain.example
@@ -59,6 +59,22 @@ gcloud run deploy travelguesser --source=. \
 ```
 
 Cloud Run scales to zero, with a two-instance scaling limit at both service and revision level, 1 CPU, 1 GiB memory, and concurrency 4. Cloud Storage, Firestore, builds, image storage, logging, and requests may incur usage charges. There is no hard billing cap. Resources remain until removed from Google Cloud.
+
+## Custom domain
+
+`tripguessr.com` uses the `tripguessr-proxy` Cloudflare Worker in [cloudflare/worker.js](cloudflare/worker.js) to reach the existing Cloud Run service over HTTPS. Cloudflare manages DNS and certificates. `www.tripguessr.com` and HTTP requests redirect to the HTTPS root domain, preserving trip paths and query strings. The database and photo bucket remain in the existing Google Cloud project.
+
+The Worker streams requests and responses, preserves app cookies, and rejects cross-site writes before translating a same-origin `Origin` header for Cloud Run. It does not cache API responses or implement a public forward proxy. Its workers.dev address returns 404. Cloudflare's Workers Free plan allows 100,000 requests per day across the account; exceeding that limit can make the custom domain unavailable until the daily reset. No paid Cloudflare subscription or Google load balancer is needed. Existing Google Cloud usage charges still apply.
+
+To redeploy the Worker with Cloudflare's official CLI after signing in:
+
+```sh
+npx wrangler@4.141.0 deploy --config cloudflare/wrangler.jsonc
+```
+
+Cloud Run app deployments remain independent: the Worker forwards to the stable service URL, so it automatically serves new app revisions.
+
+The Worker also forwards `/__/auth/*` and `/__/firebase/init.json` to the existing Firebase auth domain, without sending app session cookies to that helper. For Google sign-in to use the public domain, add `https://tripguessr.com` to the existing OAuth client's JavaScript origins and `https://tripguessr.com/__/auth/handler` to its redirect URIs, then set Cloud Run's `FIREBASE_AUTH_DOMAIN=tripguessr.com`. When rerunning initial provisioning, also pass `FIREBASE_AUTH_DOMAIN=tripguessr.com` so the generated runtime environment keeps the custom auth domain. Account IDs and trip ownership remain unchanged.
 
 ## Accounts, data, and limits
 

@@ -7,3 +7,4 @@ dist
 test-results
 firebase-debug*.log
 test
+cloudflare
