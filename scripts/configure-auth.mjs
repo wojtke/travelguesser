@@ -28,12 +28,14 @@ if(process.argv.includes('--domains')){
   if(!process.env.SUPPORT_EMAIL)throw new Error('Set SUPPORT_EMAIL to a project owner’s Google account.');
   try{await request(`https://firebase.googleapis.com/v1beta1/projects/${project}`);}catch(e){if(!e.message.startsWith('404:'))throw e;await waitOperation(await request(`https://firebase.googleapis.com/v1beta1/projects/${project}:addFirebase`,'POST',{}));}
   const apps=await request(`https://firebase.googleapis.com/v1beta1/projects/${project}/webApps`);
-  let app=apps.apps?.find(a=>a.displayName==='TravelGuesser Web');
-  if(!app){await waitOperation(await request(`https://firebase.googleapis.com/v1beta1/projects/${project}/webApps`,'POST',{displayName:'TravelGuesser Web'}));app=(await request(`https://firebase.googleapis.com/v1beta1/projects/${project}/webApps`)).apps.find(a=>a.displayName==='TravelGuesser Web');}
+  const displayName='TripGuessr Web';
+  let app=apps.apps?.find(a=>a.displayName===displayName)||apps.apps?.find(a=>a.displayName==='TravelGuesser Web');
+  if(!app){await waitOperation(await request(`https://firebase.googleapis.com/v1beta1/projects/${project}/webApps`,'POST',{displayName}));app=(await request(`https://firebase.googleapis.com/v1beta1/projects/${project}/webApps`)).apps.find(a=>a.displayName===displayName);}
+  if(app.displayName!==displayName)app=await request(`https://firebase.googleapis.com/v1beta1/${app.name}?updateMask=displayName`,'PATCH',{displayName});
   const config=await request(`https://firebase.googleapis.com/v1beta1/${app.name}/config`);
   await mkdir('.local/firebase-setup',{recursive:true,mode:0o700});
   await writeFile('.local/firebase-config.json',JSON.stringify(config,null,2),{mode:0o600});
-  await writeFile('.local/firebase-setup/firebase.json',JSON.stringify({auth:{providers:{anonymous:false,emailPassword:false,googleSignIn:{oAuthBrandDisplayName:'TravelGuesser',supportEmail:process.env.SUPPORT_EMAIL}}}}),{mode:0o600});
+  await writeFile('.local/firebase-setup/firebase.json',JSON.stringify({auth:{providers:{anonymous:false,emailPassword:false,googleSignIn:{oAuthBrandDisplayName:'TripGuessr',supportEmail:process.env.SUPPORT_EMAIL}}}}),{mode:0o600});
   const run=spawnSync('npm',['exec','--yes','--package=firebase-tools@15.31.0','--','firebase','deploy','--only','auth','--project',project,'--non-interactive'],{cwd:'.local/firebase-setup',env:{...process.env,FIREBASE_TOKEN:token,GOOGLE_CLOUD_QUOTA_PROJECT:project},stdio:'inherit'});
   if(run.status!==0)throw new Error('Firebase Auth deployment failed.');
   const current=await request(authUrl);

@@ -31,12 +31,12 @@ function App() {
   };
   return <>
     <header className="site-header"><div className="header-inner">
-      <a className="brand" href="/" onClick={e=>{e.preventDefault();navigate('/');}}><span className="brand-icon"><MapPin size={22} strokeWidth={2}/></span>travelguesser<span className="brand-dot">.</span></a>
+      <a className="brand" href="/" onClick={e=>{e.preventDefault();navigate('/');}}><span className="brand-icon"><MapPin size={22} strokeWidth={2}/></span>tripguessr<span className="brand-dot">.</span></a>
       <nav aria-label="Main navigation"><a className="how-link" href="/#how-it-works" onClick={e=>{if(route!=='/'){e.preventDefault();navigate('/');setTimeout(()=>document.getElementById('how-it-works')?.scrollIntoView({behavior:'smooth'}),100);}}}>How it works</a>{host && <button className="text-button trips-nav" onClick={()=>{navigate('/');setTimeout(()=>document.getElementById('my-trips')?.scrollIntoView({behavior:'smooth'}),100);}}>My trips</button>}<button className="button small" onClick={create}><Plus size={16}/> Create a trip</button></nav>
       <HeaderAccount key={user?.uid||'guest'} user={user} ready={ready} signIn={()=>setLogin(route)} signOut={signOut}/>
     </div></header>
     {!ready ? <div className="loading-page"><LoaderCircle className="spin"/> Loading…</div> : route === '/create' ? (host ? <CreateTrip user={user} navigate={navigate} notify={notify} signIn={()=>setLogin('/create')}/> : <div className="narrow-page"><LockKeyhole size={38}/><h1>Create a trip</h1><p>Sign in with Google to create and manage trips. Friends can play without signing in.</p><button className="button" onClick={()=>setLogin('/create')}>Continue with Google <ArrowRight size={18}/></button></div>) : /^\/g\/[^/]+\/?$/.test(route) ? <Game key={route} id={route.split('/')[2]} navigate={navigate} notify={notify}/> : route === '/' ? <Home key={user?.uid||'guest'} host={host} create={create} navigate={navigate} notify={notify}/> : <div className="narrow-page"><h1>Page not found</h1><p>We couldn’t find that page.</p><button className="button" onClick={()=>navigate('/')}>Back home</button></div>}
-    <footer className="site-footer"><a href="/" onClick={e=>{e.preventDefault();navigate('/');}}><Compass size={16}/> TravelGuesser</a></footer>
+    <footer className="site-footer"><a href="/" onClick={e=>{e.preventDefault();navigate('/');}}><Compass size={16}/> TripGuessr</a></footer>
     {login&&<CreatorLogin config={authConfig} close={()=>setLogin(null)} success={data=>{setUser(data.user);setLogin(null);if(login!==route)navigate(login);}}/>}
     {toast&&<div className="toast" role="status">{toast}<button aria-label="Dismiss notification" onClick={()=>setToast('')}><X size={16}/></button></div>}
   </>;

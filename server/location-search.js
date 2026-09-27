@@ -51,7 +51,7 @@ export function createLocationSearch({ fetchImpl = globalThis.fetch, endpoint = 
         url.searchParams.set('limit','5');
         url.searchParams.set('lang','en');
         const response = await fetchImpl(url, { signal: AbortSignal.timeout(8000), headers: {
-          Accept: 'application/json', 'User-Agent': 'TravelGuesser/1.0 (+https://github.com/wojtke/travelguesser)',
+          Accept: 'application/json', 'User-Agent': 'TripGuessr/1.0 (+https://github.com/wojtke/travelguesser)',
         } });
         if (!response.ok) throw new Error('Geocoder request failed');
         const places = normalizePlaces(await response.json());

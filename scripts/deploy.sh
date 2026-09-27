@@ -16,7 +16,7 @@ if [[ -z "${BILLING_ACCOUNT:-}" ]]; then
 fi
 
 gcloud projects describe "$PROJECT_ID" --format='value(projectId)' >/dev/null 2>&1 ||
-  gcloud projects create "$PROJECT_ID" --name=TravelGuesser --quiet
+  gcloud projects create "$PROJECT_ID" --name=TripGuessr --quiet
 LINKED_BILLING="$(gcloud billing projects describe "$PROJECT_ID" --format='value(billingAccountName)' 2>/dev/null || true)"
 if [[ "$LINKED_BILLING" != "billingAccounts/${BILLING_ACCOUNT}" ]]; then
   gcloud billing projects link "$PROJECT_ID" --billing-account="$BILLING_ACCOUNT" --quiet
@@ -41,7 +41,7 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" --member="serviceAccount:${
 
 gcloud iam roles describe travelguesserSessionManager --project="$PROJECT_ID" >/dev/null 2>&1 ||
   gcloud iam roles create travelguesserSessionManager --project="$PROJECT_ID" \
-  --title='TravelGuesser session manager' --permissions=firebaseauth.users.get,firebaseauth.users.createSession --stage=GA --quiet
+  --title='TripGuessr session manager' --permissions=firebaseauth.users.get,firebaseauth.users.createSession --stage=GA --quiet
 gcloud projects add-iam-policy-binding "$PROJECT_ID" --member="serviceAccount:${RUNTIME_SA}" \
   --role="projects/${PROJECT_ID}/roles/travelguesserSessionManager" --condition=None --quiet >/dev/null
 
@@ -64,4 +64,4 @@ gcloud run deploy "$SERVICE" --source=. --region="$REGION" --project="$PROJECT_I
 gcloud run services describe "$SERVICE" --region="$REGION" --project="$PROJECT_ID" --format='value(status.url)' > .local/service-url.txt
 SERVICE_URL="$(cat .local/service-url.txt)"
 node scripts/configure-auth.mjs --domains "$SERVICE_URL"
-echo "TravelGuesser is live at ${SERVICE_URL}. Anyone can sign in with Google to create trips."
+echo "TripGuessr is live at ${SERVICE_URL}. Anyone can sign in with Google to create trips."

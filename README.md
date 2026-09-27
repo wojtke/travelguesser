@@ -1,4 +1,4 @@
-# TravelGuesser
+# TripGuessr
 
 A photo guessing game for friends. Upload 1–12 trip photos, confirm their locations, and share an unlisted trip link. Friends enter a nickname, pin their guesses on a map, and compare distance-based scores.
 

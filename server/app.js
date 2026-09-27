@@ -19,7 +19,7 @@ const hash = v => createHash('sha256').update(v).digest('hex');
 const safeOrigin=(origin,host)=>{try{return new URL(origin).host===host;}catch{return false;}};
 const validId = /^[a-zA-Z0-9_-]{8,40}$/;
 const demo = {
-  id: 'demo-trip', title: 'World landmarks', hostName: 'TravelGuesser', demo: true, createdAt: 0,
+  id: 'demo-trip', title: 'World landmarks', hostName: 'TripGuessr', demo: true, createdAt: 0,
   photos: [
     { key: 'demo-paris.jpg', lat: 48.8584, lng: 2.2945, caption: 'The Eiffel Tower, Paris.' },
     { key: 'demo-sydney.jpg', lat: -33.8568, lng: 151.2153, caption: 'The Sydney Opera House, right on the harbour.' },
