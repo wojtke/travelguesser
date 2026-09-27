@@ -4,7 +4,7 @@ A photo guessing game for friends. Upload 1–12 trip photos, confirm their loca
 
 [Play the live app](https://travelguesser-ysll6guxmq-lm.a.run.app) · [Try the demo](https://travelguesser-ysll6guxmq-lm.a.run.app/g/demo-trip)
 
-GPS-tagged photos are located automatically. For other photos, search for a city, landmark, or address and choose a result to place the pin. You can adjust the pin on the map before publishing. Maps support dragging and scroll-wheel zoom.
+GPS-tagged photos are located automatically. For other photos, search for a city, landmark, or address and choose a result to place the pin. You can adjust the pin on the map before publishing. Maps support dragging and scroll-wheel zoom. During a round, the photo fills the screen: scroll or use the photo controls to zoom, drag to pan, and use the overlaid map to guess. The map expands on hover or focus, with a size toggle for touch screens. Press Space to confirm a placed pin (the shortcut stays inactive while typing).
 
 ## Run locally
 

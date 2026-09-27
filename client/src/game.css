@@ -1,0 +1,118 @@
+/* The photo is the playing surface; navigation and the map float above it. */
+body:has(.play-page) { overflow: hidden; }
+body:has(.play-page) > #root > .site-header,
+body:has(.play-page) > #root > .site-footer { display: none; }
+.play-page {
+  position: fixed; inset: 0; z-index: 10; max-width: none; min-height: 0;
+  margin: 0; padding: 0; background: #111b17; isolation: isolate;
+}
+.photo-viewer, .photo-viewport { position: absolute; inset: 0; }
+.photo-viewport { overflow: auto; overscroll-behavior: contain; scrollbar-color: #81907b #18221c; }
+.photo-viewport:focus-visible { outline: 2px solid #c2d399; outline-offset: -3px; }
+.photo-viewport.is-zoomed { cursor: grab; }
+.photo-viewport.is-dragging { cursor: grabbing; user-select: none; }
+.photo-canvas { min-width: 100%; min-height: 100%; }
+.photo-canvas img { display: block; width: 100%; height: 100%; object-fit: contain; user-select: none; -webkit-user-drag: none; }
+.photo-tools {
+  position: absolute; z-index: 2; left: 24px; bottom: 24px; display: flex;
+  align-items: center; gap: 2px; padding: 6px; color: #f7f8ef;
+  background: #16251ee6; border: 1px solid #ffffff29; border-radius: 12px;
+  box-shadow: 0 4px 24px #0003; backdrop-filter: blur(14px);
+}
+.photo-tools button {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  min-width: 34px; height: 34px; border: 0; border-radius: 7px;
+  padding: 7px; color: inherit; background: transparent;
+}
+.photo-tools button:hover:not(:disabled) { background: #ffffff1c; }
+.photo-tools button:disabled { opacity: .4; cursor: default; }
+.photo-tools .photo-closer { font-size: 11px; padding: 7px 9px; }
+.photo-zoom-value { width: 44px; text-align: center; font-size: 10px; font-variant-numeric: tabular-nums; color: #d4debf; }
+.photo-help { position: absolute; left: 29px; bottom: 76px; margin: 0; color: #fff; font-size: 10px; text-shadow: 0 1px 7px #000; pointer-events: none; }
+.play-heading {
+  position: absolute; z-index: 3; top: 20px; left: 24px; right: 24px;
+  display: flex; align-items: center; gap: 16px; padding: 13px 18px 17px;
+  background: #16251ee8; border: 1px solid #ffffff24; border-radius: 12px;
+  color: #fffdf0; box-shadow: 0 4px 24px #0002; backdrop-filter: blur(14px);
+}
+.play-home { display: grid; place-items: center; flex-shrink: 0; width: 34px; height: 34px; border: 1px solid #ffffff24; background: transparent; border-radius: 8px; color: inherit; }
+.play-home:hover { background: #ffffff15; }
+.play-trip { min-width: 0; flex: 1; }
+.play-heading .eyebrow { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #c4d2ae; font-size: 9px; letter-spacing: 1.3px; }
+.play-heading h1 { font-size: 22px; letter-spacing: -.5px; margin: 4px 0 0; color: inherit; line-height: 1.25; }
+.play-stats { display: flex; gap: 25px; margin: 0; color: #f8f7ea; font-size: 12px; }
+.play-stats > span { display: flex; align-items: center; gap: 7px; }
+.play-stats svg { color: #c4d2ae; }
+.play-heading .round-progress { position: absolute; bottom: 0; left: 14px; right: 14px; display: flex; gap: 5px; margin: 0; transform: translateY(1px); }
+.play-heading .round-progress span { height: 3px; background: #ffffff21; }
+.play-heading .round-progress .done { background: #a1bf7c; }
+.play-heading .round-progress .current { background: #e2dc96; }
+.play-page .guess-panel {
+  position: absolute; z-index: 4; right: 24px; bottom: 24px;
+  width: 340px; max-width: calc(100vw - 48px); max-height: calc(100dvh - 132px);
+  overflow: auto; overscroll-behavior: contain; border: 1px solid #f8fbef;
+  border-radius: 13px; background: var(--cream); box-shadow: 0 8px 45px #0005;
+  transition: width 180ms ease;
+}
+.play-page .guess-panel.is-expanded { width: min(640px, calc(100vw - 48px)); }
+.play-page .guess-panel-header { display: flex; gap: 10px; padding: 12px 14px; }
+.play-page .guess-panel-header > svg { flex-shrink: 0; color: #72825f; }
+.play-page .guess-panel-header > div { flex: 1; min-width: 0; }
+.play-page .guess-panel-header h2 { font-size: 13px; margin: 0 0 4px; line-height: 1.3; }
+.play-page .guess-panel-header p { font-size: 9px; margin: 0; }
+.map-size-toggle { flex-shrink: 0; width: 30px; height: 30px; border-radius: 6px; }
+.map-size-toggle:hover { background: #e5eadb; }
+.play-page .guess-map { height: 190px; transition: height 180ms ease; }
+.play-page .is-expanded .guess-map { height: min(45dvh, 460px); }
+.play-page .is-expanded.showing-result .guess-map { height: min(35dvh, 360px); }
+.play-page .guess-controls { padding: 7px 12px 12px; }
+.play-page .guess-controls > .coordinates { min-height: 15px; margin: 0 0 7px; }
+.play-page .guess-controls .button { font-size: 12px; min-height: 43px; }
+.play-page .guess-controls > small { font-size: 9px; margin-top: 8px; }
+.guess-controls kbd { margin-left: auto; font-family: inherit; font-size: 9px; letter-spacing: .5px; border: 1px solid #ffffff45; border-radius: 4px; padding: 3px 5px; }
+.play-page .round-result { padding: 12px 16px 16px; }
+.play-page .result-numbers { margin: 15px 0; }
+.play-page .result-numbers b { font-size: 25px; }
+.play-page .reveal-caption { margin: 0 0 14px; font-size: 11px; }
+.play-page .guess-panel > .error { margin: 0 14px 14px; }
+
+@media (max-width: 700px) {
+  .play-heading { top: 12px; left: 12px; right: 12px; padding: 11px 12px 14px; gap: 10px; }
+  .play-heading h1 { font-size: 16px; letter-spacing: -.2px; }
+  .play-heading .eyebrow { font-size: 7px; letter-spacing: .7px; }
+  .play-home { width: 29px; height: 32px; }
+  .play-stats { flex-direction: column; gap: 6px; font-size: 9px; }
+  .play-stats > span { gap: 4px; }
+  .play-stats svg { width: 12px; height: 12px; }
+  .photo-tools { top: 92px; left: 12px; bottom: auto; padding: 4px; }
+  .photo-tools button { width: 30px; height: 30px; min-width: 30px; }
+  .photo-tools .photo-closer { width: auto; font-size: 10px; padding: 6px; }
+  .photo-tools .photo-closer span { display: none; }
+  .photo-zoom-value { font-size: 9px; width: 38px; }
+  .photo-help { top: 139px; left: 15px; bottom: auto; font-size: 8px; }
+  .play-page .guess-panel { bottom: max(12px, env(safe-area-inset-bottom)); right: 12px; width: 280px; max-width: calc(100vw - 24px); max-height: calc(100dvh - 104px); }
+  .play-page .guess-panel.is-expanded { width: calc(100vw - 24px); }
+  .play-page .guess-panel-header { padding: 10px 11px; gap: 8px; }
+  .play-page .guess-panel-header h2 { font-size: 12px; }
+  .play-page .guess-panel-header p { font-size: 8px; }
+  .play-page .guess-map { height: 145px; }
+  .play-page .is-expanded .guess-map { height: min(37dvh, 380px); }
+  .play-page .is-expanded.showing-result .guess-map { height: min(30dvh, 300px); }
+  .play-page .guess-controls { padding: 6px 10px 10px; }
+  .play-page .guess-controls .button { font-size: 11px; min-height: 39px; }
+  .play-page .round-result { padding: 10px 12px 12px; }
+  .play-page .result-numbers { margin: 12px 0; }
+  .play-page .result-numbers b { font-size: 22px; }
+  .play-page .reveal-caption { font-size: 10px; margin-bottom: 10px; }
+}
+@media (max-height: 550px) and (min-width: 701px) {
+  .play-heading { top: 10px; left: 12px; right: 12px; padding: 8px 12px 11px; }
+  .play-heading h1 { font-size: 17px; }
+  .play-page .guess-panel { bottom: 12px; right: 12px; max-height: calc(100dvh - 96px); }
+  .play-page .guess-panel.is-expanded { width: min(520px, calc(100vw - 210px)); }
+  .play-page .guess-map { height: 125px; }
+  .play-page .is-expanded .guess-map { height: 35dvh; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .play-page .guess-panel, .play-page .guess-map { transition: none; }
+}
