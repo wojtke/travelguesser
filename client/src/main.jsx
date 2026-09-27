@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ArrowUpRight, ArrowRight, ArrowLeft, MapPin, Compass, Camera, Users, Globe2, Check, Copy, Plus, X, Upload, Link, LockKeyhole, Trophy, Flag, Trash2, ImagePlus, LoaderCircle, ChevronRight, Sparkles, MoveUpRight, LogOut, Maximize2, Minimize2 } from 'lucide-react';
+import { ArrowUpRight, ArrowRight, ArrowLeft, MapPin, Compass, Camera, Users, Globe2, Check, Copy, Plus, X, Upload, Link, LockKeyhole, Trophy, Flag, Trash2, ImagePlus, LoaderCircle, ChevronRight, ChevronDown, Sparkles, MoveUpRight, LogIn, LogOut, Maximize2, Minimize2 } from 'lucide-react';
 import { readPhotoLocation } from './photo-location';
 import Map from './Map';
 import LocationSearch from './LocationSearch';
@@ -13,7 +13,7 @@ function App() {
   const [route,setRoute] = useState(location.pathname);
   const [user,setUser] = useState(null), [authConfig,setAuthConfig] = useState(null), [ready,setReady] = useState(false);
   const host=!!user;
-  const [login,setLogin] = useState(false), [toast,setToast] = useState('');
+  const [login,setLogin] = useState(null), [toast,setToast] = useState('');
   const notify = message => setToast(message);
   const navigate = path => { history.pushState({},'',path); setRoute(path); window.scrollTo(0,0); };
   useEffect(() => {
@@ -24,17 +24,44 @@ function App() {
     return () => removeEventListener('popstate', listener);
   }, []);
   useEffect(() => { if (!toast) return; const timer = setTimeout(()=>setToast(''),6000); return ()=>clearTimeout(timer); },[toast]);
-  const create = () => host ? navigate('/create') : setLogin(true);
+  const create = () => host ? navigate('/create') : setLogin('/create');
+  const signOut = async () => {
+    try { await api('/auth/session',{method:'DELETE'});setUser(null);navigate('/'); }
+    catch(e) { notify(e.message); }
+  };
   return <>
     <header className="site-header"><div className="header-inner">
       <a className="brand" href="/" onClick={e=>{e.preventDefault();navigate('/');}}><span className="brand-icon"><MapPin size={22} strokeWidth={2}/></span>travelguesser<span className="brand-dot">.</span></a>
       <nav aria-label="Main navigation"><a className="how-link" href="/#how-it-works" onClick={e=>{if(route!=='/'){e.preventDefault();navigate('/');setTimeout(()=>document.getElementById('how-it-works')?.scrollIntoView({behavior:'smooth'}),100);}}}>How it works</a>{host && <button className="text-button trips-nav" onClick={()=>{navigate('/');setTimeout(()=>document.getElementById('my-trips')?.scrollIntoView({behavior:'smooth'}),100);}}>My trips</button>}<button className="button small" onClick={create}><Plus size={16}/> Create a trip</button></nav>
+      <HeaderAccount key={user?.uid||'guest'} user={user} ready={ready} signIn={()=>setLogin(route)} signOut={signOut}/>
     </div></header>
-    {!ready ? <div className="loading-page"><LoaderCircle className="spin"/> Unpacking…</div> : route === '/create' ? (host ? <CreateTrip user={user} navigate={navigate} notify={notify} signIn={()=>setLogin(true)}/> : <div className="narrow-page"><LockKeyhole size={38}/><h1>Your next trip starts here.</h1><p>Sign in with Google to create a trip and keep your photos together. Friends can play without signing in.</p><button className="button" onClick={()=>setLogin(true)}>Continue with Google <ArrowRight size={18}/></button></div>) : /^\/g\/[^/]+\/?$/.test(route) ? <Game key={route} id={route.split('/')[2]} navigate={navigate} notify={notify}/> : route === '/' ? <Home key={user?.uid||'guest'} host={host} create={create} navigate={navigate} notify={notify}/> : <div className="narrow-page"><h1>A little off the map.</h1><p>We couldn’t find that page.</p><button className="button" onClick={()=>navigate('/')}>Back home</button></div>}
-    <footer className="site-footer"><a href="/" onClick={e=>{e.preventDefault();navigate('/');}}><Compass size={16}/> A little closer, wherever you are.</a><span>Made for the group chat <span className="footer-star">✳</span></span>{host&&<button title={`Sign out${user.email?` (${user.email})`:""}`} className="text-button" onClick={async()=>{try{await api('/auth/session',{method:'DELETE'});setUser(null);navigate('/');}catch(e){notify(e.message);}}}><LogOut size={15}/> Sign out</button>}</footer>
-    {login&&<CreatorLogin config={authConfig} close={()=>setLogin(false)} success={data=>{setUser(data.user);setLogin(false);navigate('/create');}}/>}
+    {!ready ? <div className="loading-page"><LoaderCircle className="spin"/> Unpacking…</div> : route === '/create' ? (host ? <CreateTrip user={user} navigate={navigate} notify={notify} signIn={()=>setLogin('/create')}/> : <div className="narrow-page"><LockKeyhole size={38}/><h1>Your next trip starts here.</h1><p>Sign in with Google to create a trip and keep your photos together. Friends can play without signing in.</p><button className="button" onClick={()=>setLogin('/create')}>Continue with Google <ArrowRight size={18}/></button></div>) : /^\/g\/[^/]+\/?$/.test(route) ? <Game key={route} id={route.split('/')[2]} navigate={navigate} notify={notify}/> : route === '/' ? <Home key={user?.uid||'guest'} host={host} create={create} navigate={navigate} notify={notify}/> : <div className="narrow-page"><h1>A little off the map.</h1><p>We couldn’t find that page.</p><button className="button" onClick={()=>navigate('/')}>Back home</button></div>}
+    <footer className="site-footer"><a href="/" onClick={e=>{e.preventDefault();navigate('/');}}><Compass size={16}/> A little closer, wherever you are.</a><span>Made for the group chat <span className="footer-star">✳</span></span></footer>
+    {login&&<CreatorLogin config={authConfig} close={()=>setLogin(null)} success={data=>{setUser(data.user);setLogin(null);if(login!==route)navigate(login);}}/>}
     {toast&&<div className="toast" role="status">{toast}<button aria-label="Dismiss notification" onClick={()=>setToast('')}><X size={16}/></button></div>}
   </>;
+}
+
+function HeaderAccount({user,ready,signIn,signOut}) {
+  const [open,setOpen]=useState(false),[busy,setBusy]=useState(false);
+  const ref=useRef(null),trigger=useRef(null);
+  useEffect(()=>{
+    if(!open)return;
+    const outside=e=>{if(!ref.current?.contains(e.target))setOpen(false);};
+    const escape=e=>{if(e.key==='Escape'){setOpen(false);trigger.current?.focus();}};
+    document.addEventListener('pointerdown',outside);document.addEventListener('keydown',escape);
+    return()=>{document.removeEventListener('pointerdown',outside);document.removeEventListener('keydown',escape);};
+  },[open]);
+  if(!ready)return <div className="header-account"><button className="account-trigger" disabled aria-label="Checking sign-in status"><LoaderCircle size={18} className="spin"/><span>Loading…</span></button></div>;
+  if(!user)return <div className="header-account"><button className="button outline small header-signin" onClick={signIn}><LogIn size={16}/> Sign in</button></div>;
+  const name=user.name||user.email||'Explorer';
+  const initials=name.trim().split(/\s+/).map(part=>Array.from(part)[0]).slice(0,2).join('').toLocaleUpperCase();
+  return <div className="header-account" ref={ref} onBlur={e=>{if(!e.currentTarget.contains(e.relatedTarget))setOpen(false);}}>
+    <button ref={trigger} className="account-trigger" aria-label={`Signed in as ${name}. Account options`} aria-expanded={open} aria-controls="account-panel" onClick={()=>setOpen(value=>!value)}>
+      <span className="account-avatar" aria-hidden="true">{initials}</span><span className="account-label"><small>Signed in</small><strong>{name}</strong></span><ChevronDown size={14} aria-hidden="true"/>
+    </button>
+    {open&&<div id="account-panel" className="account-panel" role="group" aria-label="Your account"><span className="eyebrow">YOUR ACCOUNT</span><strong>{name}</strong>{user.email&&<span className="account-email">{user.email}</span>}<button className="text-button account-signout" disabled={busy} onClick={async()=>{setBusy(true);try{await signOut();}finally{setBusy(false);}}}>{busy?<LoaderCircle size={16} className="spin"/>:<LogOut size={16}/>} {busy?'Signing out…':'Sign out'}</button></div>}
+  </div>;
 }
 
 function Home({host,create,navigate,notify}) {
