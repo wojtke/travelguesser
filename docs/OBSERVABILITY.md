@@ -45,7 +45,7 @@ Four enabled policies record incidents:
 - At least ten HTTP 429 responses in a five-minute interval.
 - A structured application error or crash. Notifications, if configured, are limited to one per 15 minutes for this policy.
 
-**No email recipient is configured in this release.** Incidents appear in the dashboard; they do not send messages. An approved recipient can be configured privately with `ALERT_EMAIL` when running the setup script. Never commit the address to the repository or publish it in the app. No runtime permission or service-account key is added.
+**Private operator email alerts are enabled on all four policies.** Incidents also appear in the dashboard. The recipient is stored only in Cloud Monitoring and configured privately with `ALERT_EMAIL` when running the setup script. Never commit the address to the repository or publish it in the app. No runtime permission or service-account key is added.
 
 The public health endpoint tests DNS/TLS, Cloudflare, Cloud Run and the web process. It intentionally does not write gameplay data or read a photo/database record every five minutes. Dependency failures are detected when application traffic exercises them. This is not a complete synthetic playthrough. Client JavaScript, maps or sign-in failures confined to a browser are not automatically reported; no browser error collector, session replay or third-party analytics script has been added.
 
