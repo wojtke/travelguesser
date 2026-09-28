@@ -1,6 +1,6 @@
 # Privacy operations
 
-Operator: **Wojciech Jasiński, Poland**. Reviewed for this implementation on 27 September 2026. Public notices live at `/privacy`, `/terms` and `/cookies`.
+Operator: **Wojciech Jasiński, Poland**. Reviewed for this implementation on 28 September 2026. Public notices live at `/privacy`, `/terms` and `/cookies`.
 
 The operator's personal email has been removed from the site and current documentation at their request. No replacement public support address or contact form is configured. A working private contact route for privacy requests and content reports remains an outstanding operating requirement; do not treat the notices alone as complete compliance. Google Auth's support address is configured separately and needs a valid replacement before it can be changed.
 
@@ -26,11 +26,11 @@ This release implements a privacy baseline. Publishing a notice alone does not e
 | Trips, host names, coordinates/captions, solo runs/leaderboards, current live state | Firestore, Warsaw | Owner trip deletion removes game and child collections. Previous live state is replaced on a new lobby. No automatic published-trip expiry. |
 | Processed photos | Private GCS bucket, Warsaw | Removed from active storage with trip deletion, then **7-day soft-delete retention**. No original file names/originals retained. |
 | Live invite | Embedded in trip document | Access expires after **24h**; expiry is **not physical deletion**. |
-| Default app/request logs | Google Cloud Logging | Verified `_Default`: **30 days**. |
+| Sanitized application logs and remaining default logs | Google Cloud Logging | `_Default`: **30 days**. New raw request entries for this service are excluded; older entries expire normally. |
 | Required audit logs | Google Cloud Logging | Verified `_Required`: **400 days**. Other providers have their own security/operational retention. |
 | Local operator backups from earlier migration/admin work | Ignored `.local/` on the operator's computer | Not public GitHub content; include them when handling deletion/export requests. Keep only as long as there is a documented need. |
 
-The domain proxy does not intentionally record bodies, credentials or photo contents. Infrastructure request logs can contain private trip paths/IPs; keep log access restricted. Cloudflare/Firebase/global support processing means the whole service is not exclusively EU-resident.
+The domain proxy does not intentionally record bodies, credentials or photo contents. Routine Cloudflare invocation logging is disabled, and new raw Cloud Run request records are excluded after verifying the replacement structured logs. Application telemetry uses route templates and aggregate operation counts without visitor identities. Historical request logs and provider security/exception records can still contain private paths or IPs; keep access restricted. See [monitoring and privacy details](OBSERVABILITY.md). Cloudflare/Firebase/global support processing means the whole service is not exclusively EU-resident.
 
 ## Handling a privacy or content request
 

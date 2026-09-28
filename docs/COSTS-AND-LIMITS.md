@@ -73,3 +73,7 @@ Keep this setup for occasional small games. Use a **$5–$10/month planning allo
 Watch Cloudflare daily requests and CPU errors, Firestore daily reads, Cloud Run billable time/egress/429s/5xx, photo bucket size including soft deletes, and Artifact Registry/source-bundle growth. Set billing alerts before a wider launch; [Google budgets do not cap spending](https://cloud.google.com/billing/docs/how-to/budgets). No new budget or paid plan is configured by this release.
 
 Approach 70k Worker requests/day: investigate idle tabs/bots and decide whether to spend $5 on Workers or reduce polling. Approach sustained map/search use: arrange capacity with a provider; never work around a provider block. If live traffic grows, evaluate push updates with measured costs before adding another service. Do not publicly cache private trip photos or personalized API responses to save egress.
+
+## Monitoring update — 28 September 2026
+
+The [observability setup](OBSERVABILITY.md) adds a private dashboard, one bounded activity counter and a three-location uptime check every five minutes (about 25,920 executions/month and 864 origin/Worker requests/day). Native metrics, current uptime checks and this small counter are expected to fit the applicable free allowances at current traffic. Account-wide allowances and origin processing still matter. Alerts are dashboard-only until a recipient is approved; Google currently lists alerting charges as starting no sooner than 1 September 2027. No paid monitoring subscription or hard spending cap was added.

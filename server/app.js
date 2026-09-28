@@ -14,6 +14,7 @@ import { expireLive, getLive, newLive, publicLive, updateLive } from './live.js'
 import { createLocationSearch } from './location-search.js';
 import { createAuthentication, SESSION_DURATION } from './auth.js';
 import { LIMITS } from './limits.js';
+import { errorDetails, isAppPage, observeRequests, writeLog } from './observability.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const hash = v => createHash('sha256').update(v).digest('hex');
@@ -28,10 +29,11 @@ const demo = {
   ],
 };
 
-export function createApp({ store = createStore(), auth = createAuthentication(), rateLimits = true, searchLocations = createLocationSearch() } = {}) {
+export function createApp({ store = createStore(), auth = createAuthentication(), rateLimits = true, searchLocations = createLocationSearch(), log = process.env.NODE_ENV==='production'?writeLog:()=>{}, distDirectory = path.join(root,'dist') } = {}) {
   const authOrigin = auth.config.firebase ? `https://${auth.config.firebase.authDomain}` : null;
   const app = express();
   app.disable('x-powered-by');
+  app.use(observeRequests(log));
   app.use((req,res,next)=>{
     if(/^\/(g(?:\/|$)|api(?:\/|$)|create(?:\/|$))/.test(req.path))res.set('X-Robots-Tag','noindex, nofollow, noarchive, noimageindex, nosnippet').set('Cache-Control','no-store');
     next();
@@ -121,7 +123,7 @@ export function createApp({ store = createStore(), auth = createAuthentication()
       if(settings.mode==='live')game=await store.mutateGame(id,g=>newLive(g));
       res.status(201).json(publicGame(game));
     } catch (e) {
-      await store.deleteGame(id,ownerUid).catch(cleanup => console.error('Upload cleanup failed', cleanup.message));
+      await store.deleteGame(id,ownerUid).catch(cleanup => log({event:'upload_cleanup_failed',severity:'ERROR',...errorDetails(cleanup)}));
       throw e;
     }
   });
@@ -208,13 +210,13 @@ export function createApp({ store = createStore(), auth = createAuthentication()
   });
   app.use('/api', (_req,_res,next) => next(new HttpError(404, 'Endpoint not found.')));
   app.get('/robots.txt',(_req,res)=>res.type('text/plain').send('User-agent: *\nAllow: /\n# Trip and API responses carry X-Robots-Tag: noindex. They must remain crawlable for it to work.\n'));
-  app.use(express.static(path.join(root, 'dist'), { maxAge: '1h', index: false }));
-  app.get('/{*path}', (_req,res) => res.sendFile(path.join(root, 'dist', 'index.html')));
+  app.use(express.static(distDirectory, { maxAge: '1h', index: false }));
+  app.get('/{*path}', (req,res) => res.status(isAppPage(req.path)?200:404).sendFile(path.join(distDirectory,'index.html')));
   app.use((err,_req,res,_next) => {
     if (err instanceof multer.MulterError) return res.status(400).json({ error: 'Use up to 12 photos, each smaller than 2 MB after resizing.' });
     const status = err.status || 500;
-    if (status >= 500) console.error(err);
-    res.status(status).json({ error: status >= 500 ? 'Something went wrong. Please try again in a moment.' : err.message });
+    if (status >= 500) res.locals.telemetryError=errorDetails(err);
+    res.status(status).json({ error: status >= 500 ? 'Something went wrong. Please try again in a moment.' : err instanceof HttpError ? err.message : status===404?'Not found.':'The request could not be read.' });
   });
   return app;
 }

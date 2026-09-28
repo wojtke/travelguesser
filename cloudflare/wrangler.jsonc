@@ -8,5 +8,5 @@
     { "pattern": "tripguessr.com", "custom_domain": true },
     { "pattern": "www.tripguessr.com", "custom_domain": true }
   ],
-  "observability": { "enabled": true }
+  "observability": { "enabled": true, "logs": { "enabled": true, "invocation_logs": false } }
 }

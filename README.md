@@ -20,6 +20,7 @@ Trips are **link-only**, with no public directory. New links have 128 bits of ra
 
 - [Costs, free tiers, service limits and traffic estimates](docs/COSTS-AND-LIMITS.md)
 - [Privacy controls, retention and request handling](docs/PRIVACY-OPERATIONS.md)
+- [Traffic dashboard, uptime checks and privacy-conscious monitoring](docs/OBSERVABILITY.md)
 
 ## Run locally
 
