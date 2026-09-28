@@ -75,6 +75,7 @@ test('removed players cannot read current/future photos or group results', async
       { key: '1.jpg', lat: 0, lng: 0 },
     ],
   });
+  delete game.live.protocolVersion; // Legacy lobby access control.
   for (const actor of [removed, remaining])
     game = updateLive(game, game.live.id, actor, 'join', { name: actor.playerId });
   game = updateLive(game, game.live.id, owner, 'start', { round: 0 });

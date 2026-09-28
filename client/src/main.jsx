@@ -5,6 +5,7 @@ import { api } from './api';
 import Home from './Home';
 import HeaderAccount from './HeaderAccount';
 import CreatorLogin from './CreatorLogin';
+const SharedResults = lazy(() => import('./ResultsPanels'));
 const Game = lazy(() => import('./Game'));
 const LiveGame = lazy(() => import('./LiveGame'));
 const CreateTrip = lazy(() => import('./CreateTrip'));
@@ -156,6 +157,13 @@ function App() {
               </button>
             </div>
           )
+        ) : /^\/g\/[^/]+\/results\/[^/]+\/?$/.test(route) ? (
+          <SharedResults
+            key={route}
+            id={route.split('/')[2]}
+            token={route.split('/')[4]}
+            navigate={navigate}
+          />
         ) : /^\/g\/[^/]+\/live\/[^/]+\/?$/.test(route) ? (
           <LiveGame
             key={route}

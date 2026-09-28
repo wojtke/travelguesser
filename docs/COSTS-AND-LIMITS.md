@@ -1,6 +1,6 @@
 # TripGuessr costs and limits
 
-Checked **27 September 2026**. USD list prices before tax/currency conversion; this is a planning model, not a bill or a spending cap. Regional prices below were checked with **Warsaw (europe-central2)** selected in Google's official pricing tables.
+Base service prices checked **27 September 2026**; live-stream billing model updated **28 September 2026**. USD list prices before tax/currency conversion; this is a planning model, not a bill or a spending cap. Regional prices below were checked with **Warsaw (europe-central2)** selected in Google's official pricing tables.
 
 ## Current setup
 
@@ -29,41 +29,35 @@ Cloud Run, the database and photo bucket are in Warsaw. Authentication and Cloud
 Google Auth's branding configuration now uses TripGuessr and the public homepage/privacy/terms URLs. Brand verification is a separate Google process; no verified-brand status is claimed. The app requests only basic identity scopes (`openid`, email, profile). Google's [production-readiness guidance](https://developers.google.com/identity/protocols/oauth2/production-readiness/overview) distinguishes these from unverified sensitive/restricted scopes that trigger the 100-user warning cap. Adding Google Drive/Photos or other scopes would require a fresh quota/verification review.
 
 - 5 trips/creator × 12 photos × 2 MiB maximum = **120 MiB of current photos per account**. This is not a global storage cap. Trips remain until deleted; soft-deleted copies temporarily add storage.
-- Cloud Run: **min 0, max 2 instances**, 1 vCPU, 1 GiB RAM, concurrency 4, 60s request timeout. This controls scaling; it is not a hard billing ceiling. At sustained load, requests can queue or fail. Eight in-flight requests across two instances is not the same as eight players.
-- A live lobby supports **20 players**, plus the host if spectating. One current lobby/trip; links expire after 24h. Hosting a new lobby replaces the old live state. Existing solo progress remains separate.
-- Each active visible browser polls every **3 seconds**, reading one game document. No idle writes and no always-open Cloud Run connection. Hidden tabs stop polling; returning to the tab refreshes it. Finished sessions stop polling. Changes usually appear within a polling interval plus network latency; photos are synchronized by round, not streamed at frame precision.
-- Joining, guesses, host actions and timer reveals use Firestore transactions. Retries/contention can add reads. `live` and `photos` fields are excluded from indexes. One document per lobby is intentionally bounded to small groups; higher-scale live play would need a different synchronization design.
-- The host starts each round. All confirmed guesses or timer expiry trigger reveal; disconnected players get 0 at expiry. In untimed games the host can remove an absent player or reveal manually. A deadline is checked on the next request; it does not require a paid background scheduler.
-- Rate limits are per running instance: 500 ordinary API requests/15 min/browser, 45 live requests/min/browser, separate sign-in/upload/search limits. They deter casual abuse but do not stop distributed abuse or users creating many accounts.
+- Cloud Run: **min 0, max 2 instances**, 1 vCPU, 1 GiB RAM, concurrency **80**, 60s timeout. Up to **60 live streams/instance**, two per browser/creator identity. Upload admission permits only **one image-processing request per instance**, before multipart buffering. Limits bound pressure, not spending; excess demand can receive 429s.
+- New live lobbies use server-sent events (SSE), with one Firestore listener per room per instance. Commands remain POST requests. Streams close after 45s and reconnect, with 15s heartbeats; hidden/finished/unavailable tabs disconnect. Three-second polling remains a fallback. Existing lobbies retain their previous protocol until replaced.
+- 20 players/lobby plus a spectating host, 24h link lifetime, one current lobby/trip. A five-second preparation window preloads photos and sets the same server start/deadline for everyone. Readiness never delays it; slower clients see the remaining time. This reduces normal delivery skew but cannot guarantee simultaneous display on disconnected/slow devices.
+- Hosts spectate by default and may join as players. The host starts round one; subsequent rounds can be host-only or any active player. Timers accept 1–3600s, no limit, or X seconds after the first confirmed guess. The latest successfully saved pin counts on timeout/manual reveal; no saved pin means zero. Private draft documents are separate from the room and are never broadcast to opponents before reveal.
+- Drafts are versioned and saved at most twice/second per browser. Each save transaction reads the room and draft and writes the draft. Commands/finalization also read drafts (up to 20) transactionally. Readiness, confirmed guesses, joins and phase transitions update the room and its listener. Listener reconnects, contention and separate instances increase reads. `live` and `photos` remain excluded from indexes.
+- Per-instance limits: 3,000 API requests/min/network and 6,000/min total; 120 draft saves/min/player, 45 other live requests/min/player; 500 ordinary API requests/15min/browser. Other sign-in/upload/search limits remain. These are per-process abuse controls, not global billing caps.
+- Drafts expire with their lobby; optional result snapshots expire after 30 days. TTL deletion is billed and asynchronous; the app blocks expired data immediately. Snapshot links remain independent of replacement lobbies and stop working when a trip is paused/deleted.
 
-## What traffic fits the free tiers?
+## Live connections and costs
 
-One **30-minute player-session** means one active browser, including time in the lobby/results. Assume 10 photos, 0.5 MiB each, about 600 polls plus actions/assets: use **650 requests and 650 database reads** per session for planning. A spectating host also counts. Photo display and result thumbnails can fetch a photo twice; budget **12 MiB transferred/session**, including app/polling traffic.
+[Cloud Run supports streaming HTTP](https://docs.cloud.google.com/run/docs/triggering/https-request). Under [request-based billing](https://cloud.google.com/run/pricing), an instance remains billable while at least one stream is open, including quiet lobby time. Forty 45-second connections occupy approximately the same compute time as one 30-minute stream. Concurrent streams share instance compute; a room spread across two instances can occupy both. Scale-to-zero applies after connections close. No extra service or always-on minimum instance is introduced.
 
-Under those assumptions:
+[Firestore listeners are billed for initial reads and document changes](https://firebase.google.com/docs/firestore/pricing). Sharing one server listener per room avoids one database listener per player, but draft writes, transactional reads and reconnects still count. Browser map tiles are separate: lazy result mini-maps reduce unnecessary downloads; there is still no guaranteed OSM capacity allowance.
 
-- Firestore's free reads cover about **76 player-sessions/day**. Extra reads are inexpensive; a burst of 100k reads costs about $0.0195 above that day's free 50k.
-- Workers Free covers about **153 player-sessions/day**, before other visitors, bots or account Workers. That's roughly seven 30-minute rooms with 20 players plus a spectating host. A crowded single day matters even if the monthly average is low.
-- 100k Worker requests could also be about 5,000 active browser-minutes of polling alone. Leaving visible lobbies open for hours consumes the allowance without additional games.
-- At 0.1–0.3 allocated instance-seconds/request, Cloud Run's Warsaw CPU credit covers roughly **1.29M–429k requests/month**, before startup/shutdown/upload work. Overlapping requests share compute, so request count alone cannot predict compute cost accurately.
-
-## Monthly planning scenarios
-
-Assume traffic evenly spread over 30 days, other projects have not consumed shared free allowances, 1 CPU/1 GiB, and 0.1–0.3 allocated instance-seconds/request. These are calculated examples, **not measured production latency or promised bills**.
+The old polling-only estimate is replaced by an explicit live-room model. One player-session is 30 minutes, with 10 photos, 10 saved pin moves/photo and 12 MiB transfer (including repeat result images). Model **220 requests, 700 document reads and 125 writes/player-session**; this includes reconnects, readiness, locks and an allowance for draft queries/listener reads. Sustained dragging and fallback polling can exceed it. Add the uptime check's 25,920 requests/month. For five simultaneous browsers/room, assume one or two occupied instances for the room's duration. Rooms overlapping on the same instance can cost less. Free quotas are otherwise unused and traffic is evenly spread over 30 days.
 
 | Live player-sessions/month | Stored trips | Requests/month | Estimated serving total/month |
 | ---: | ---: | ---: | ---: |
-| 100 | 25 | 65,000 | **about $0.14** |
-| 1,000 | 100 | 650,000 | **about $1.43–$3.66** |
-| 10,000 | 1,000 | 6.5M | **about $42–$90**, including a hypothetical $5 Workers upgrade |
+| 100 | 25 | 47,920 | **about $0.14** |
+| 1,000 | 100 | 245,920 | **about $9.56–$22.92** |
+| 10,000 | 1,000 | 2,225,920 | **about $145.59–$279.15** |
 
-The current **Free Worker would not serve the 10k scenario reliably**: its average is already 217k requests/day. No paid upgrade was made. All examples exclude the domain renewal, tax, build/artifact storage, log overages, startup effects, upload writes, database writes/storage overages, unusual destinations, repeated downloads and abuse. These are normally small at friends-and-family scale, but are not zero by definition. Double photo sizes approximately doubles the image-transfer portion. Solo games do not poll and consume far fewer API requests.
+These are assumptions, not measured bills. Excludes domain, tax, builds/artifacts, logs, photo uploads, database storage, startup overhead, unusual destinations and abuse. A lone browser keeping a lobby open uses compute too; larger groups share it more efficiently. Two instances occupied continuously for 30 days would cost roughly $187 in compute after the assumed credits, before storage/egress/requests. Even the upper example is not a cap.
 
-Reproduce/adapt the model:
+Under the usage assumptions, 50k free reads/day cover about **71 player-sessions/day**, and 20k writes/day about **160**. Worker Free's 100k/day, less the 864 uptime requests, covers about **450 player-sessions/day** before other traffic. Bursts, bots, other Workers and pin dragging can hit that ceiling earlier. Firestore excess is billed; Worker Free requests can fail at the daily limit. No paid Worker upgrade is made.
 
 ```sh
-node scripts/estimate-costs.mjs 1000 100
-# Arguments: monthly 30-minute player-sessions, stored trips
+node scripts/estimate-costs.mjs 1000 100 5
+# Monthly 30-minute player-sessions, stored trips, simultaneous browsers per room
 ```
 
 ## Practical operating thresholds
@@ -72,7 +66,7 @@ Keep this setup for occasional small games. Use a **$5–$10/month planning allo
 
 Watch Cloudflare daily requests and CPU errors, Firestore daily reads, Cloud Run billable time/egress/429s/5xx, photo bucket size including soft deletes, and Artifact Registry/source-bundle growth. Set billing alerts before a wider launch; [Google budgets do not cap spending](https://cloud.google.com/billing/docs/how-to/budgets). No new budget or paid plan is configured by this release.
 
-Approach 70k Worker requests/day: investigate idle tabs/bots and decide whether to spend $5 on Workers or reduce polling. Approach sustained map/search use: arrange capacity with a provider; never work around a provider block. If live traffic grows, evaluate push updates with measured costs before adding another service. Do not publicly cache private trip photos or personalized API responses to save egress.
+Approach 70k Worker requests/day: investigate idle tabs/bots and decide whether to spend $5 on Workers or reduce request volume. Approach sustained map/search use: arrange capacity with a provider; never work around a provider block. If live traffic grows, compare measured billable instance time, draft write volume and stream reconnects with this model before adding another service. Do not publicly cache private trip photos or personalized API responses to save egress.
 
 ## Monitoring update — 28 September 2026
 

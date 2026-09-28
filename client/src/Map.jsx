@@ -19,7 +19,17 @@ export const playerColors = [
   '#b52d30',
   '#23687d',
 ];
-export default function Map({ value, onChange, actual, guesses, focus, className = '', zoom = 2 }) {
+export default function Map({
+  value,
+  onChange,
+  actual,
+  guesses,
+  focus,
+  className = '',
+  zoom = 2,
+  interactive = true,
+  meId,
+}) {
   const element = useRef(null),
     map = useRef(null),
     markers = useRef(null),
@@ -30,7 +40,12 @@ export default function Map({ value, onChange, actual, guesses, focus, className
       worldCopyJump: true,
       minZoom: 2,
       maxZoom: 18,
-      scrollWheelZoom: true,
+      scrollWheelZoom: interactive,
+      dragging: interactive,
+      touchZoom: interactive,
+      doubleClickZoom: interactive,
+      keyboard: interactive,
+      zoomControl: interactive,
     }).setView(value ? [value.lat, value.lng] : [23, 10], value ? 7 : zoom);
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
@@ -68,21 +83,21 @@ export default function Map({ value, onChange, actual, guesses, focus, className
             p.guess.lat,
             p.guess.lng + 360 * Math.round((actual.lng - p.guess.lng) / 360),
           ],
-          color = playerColors[i % playerColors.length];
+          color = playerColors[((p.marker || i + 1) - 1) % playerColors.length];
         points.push(point);
         const label = document.createElement('span');
-        label.textContent = `${i + 1}. ${p.name}`;
+        label.textContent = `${p.marker || i + 1}. ${p.name}${p.id === meId ? ' (You)' : ''}`;
         L.marker(point, {
           icon: L.divIcon({
-            className: 'player-map-marker',
-            html: `<span style="background:${color}">${i + 1}</span>`,
+            className: `player-map-marker ${p.id === meId ? 'my-map-marker' : ''}`,
+            html: `<span style="background:${color}">${p.id === meId ? 'You' : p.marker || i + 1}</span>`,
             iconSize: [28, 28],
             iconAnchor: [14, 14],
           }),
           keyboard: false,
         })
           .addTo(layers)
-          .bindTooltip(label);
+          .bindTooltip(label, { permanent: p.id === meId, direction: 'top' });
         L.polyline([point, points[0]], { color, weight: 2, opacity: 0.65, dashArray: '5 7' }).addTo(
           layers,
         );
@@ -120,7 +135,7 @@ export default function Map({ value, onChange, actual, guesses, focus, className
       } else m.setView([actual.lat, lng], 7);
     } else if (value && !m.getBounds().contains([value.lat, value.lng]))
       m.panTo([value.lat, value.lng]);
-  }, [value?.lat, value?.lng, actual?.lat, actual?.lng, guesses]);
+  }, [value?.lat, value?.lng, actual?.lat, actual?.lng, guesses, meId]);
   useEffect(() => {
     if (!focus || !map.current) return;
     if (focus.bounds) map.current.fitBounds(focus.bounds, { padding: [30, 30], maxZoom: 16 });

@@ -17,10 +17,25 @@ const exactRoutes = new Set([
   '/api/games',
 ]);
 const methods = new Set(['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']);
-const actions = new Set(['join', 'guess', 'start', 'next', 'remove', 'leave', 'reveal', 'end']);
+const actions = new Set([
+  'join',
+  'guess',
+  'start',
+  'next',
+  'remove',
+  'leave',
+  'reveal',
+  'end',
+  'draft',
+  'ready',
+  'events',
+]);
 
 export function routeName(path) {
   if (exactRoutes.has(path)) return path;
+  if (/^\/g\/[^/]+\/results\/[^/]+\/?$/.test(path)) return '/g/:trip/results/:result';
+  if (/^\/api\/games\/[^/]+\/results\/[^/]+\/?$/.test(path))
+    return '/api/games/:trip/results/:result';
   if (path.startsWith('/assets/')) return '/assets/*';
   if (/^\/g\/[a-zA-Z0-9_-]{8,40}\/?$/.test(path)) return '/g/:trip';
   if (/^\/g\/[a-zA-Z0-9_-]{8,40}\/live\/[a-zA-Z0-9_-]{8,40}\/?$/.test(path))
@@ -51,6 +66,7 @@ export function isAppPage(path) {
     '/cookies',
     '/g/:trip',
     '/g/:trip/live/:lobby',
+    '/g/:trip/results/:result',
   ].includes(routeName(path));
 }
 
@@ -94,7 +110,7 @@ export function errorDetails(error) {
       // Only code locations below our server or dependencies; no first line,
       // dynamic function names, absolute paths, request values, or stack causes.
       const m = line.match(
-        /(?:\/(server\/[a-z-]+\.js|node_modules\/[a-zA-Z0-9_@./-]+\.(?:js|cjs|mjs))|(node:[a-zA-Z0-9_/-]+)):(\d+):(\d+)\)?$/,
+        /(?:\/(server\/(?:routes\/)?[a-z-]+\.js|node_modules\/[a-zA-Z0-9_@./-]+\.(?:js|cjs|mjs))|(node:[a-zA-Z0-9_/-]+)):(\d+):(\d+)\)?$/,
       );
       return m ? [`${m[1] || m[2]}:${m[3]}:${m[4]}`] : [];
     })

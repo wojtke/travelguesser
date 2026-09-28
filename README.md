@@ -8,9 +8,11 @@ GPS-tagged photos are located automatically. For other photos, search for a city
 
 ## Game options and live sessions
 
-Choose independent play or a live lobby when creating a trip. Set a per-photo timer (15 seconds to 5 minutes, or unlimited) and optionally shuffle the photos. In My trips, **Host live** also starts a lobby for an existing trip. Friends join with nicknames; the host starts each round. Everyone sees the same photo, guesses remain hidden until everyone submits or time expires, and a map/table shows each player’s distance and score. The host then starts the next round. Up to 20 players can join; the host can spectate, remove absent players or reveal early.
+Choose independent play or a live lobby, with a 1–3600-second slider/custom timer, no limit, or a live countdown after the first confirmed guess. Photos and their locations come first in creation; editable automatic trip names and options follow. Missing details are highlighted, and Previous/Next preserves photo edits.
 
-Live sessions use the existing Firestore database and server, with three-second polling while the tab is visible. There is no extra always-on server. Lobby links expire after 24 hours; this is an access expiry, not automatic data deletion. Only one live lobby is current per trip. `/g/<trip-id>` directs players to an active lobby; after it ends, that trip link supports independent play again. Existing solo results are retained.
+Live hosts watch by default or opt to play. The host starts the first round; later rounds can be host-only or any player. A fixed five-second preparation preloads photos with a common start/deadline. Saved map pins count if time runs out. Results show personal mini-maps, distinct round/overall scores, numeric ranks, guessing duration, completion time and a round-by-round matrix. “Invite to trip” and optional “Share my results” are separate; result links are spoiler-free and expire after 30 days.
+
+Live sessions use SSE through the existing server and one Firestore listener per room per instance, with polling fallback. Streams reconnect every 45 seconds and disconnect in hidden/finished tabs. A connected room keeps Cloud Run billable; see [cost assumptions](docs/COSTS-AND-LIMITS.md). Lobby links/private drafts expire after 24 hours; stored lobby results remain until replaced/deleted. Existing lobbies retain their older protocol. `/g/<trip-id>` opens the active lobby, then supports independent play after it ends. Existing solo results are retained. See [migration and retention operations](docs/PRIVACY-OPERATIONS.md).
 
 ## Privacy and operating costs
 
@@ -80,7 +82,7 @@ gcloud run deploy travelguesser --source=. \
   --build-service-account=projects/YOUR_PROJECT_ID/serviceAccounts/travelguesser-build@YOUR_PROJECT_ID.iam.gserviceaccount.com --quiet
 ```
 
-Cloud Run scales to zero, with a two-instance scaling limit at both service and revision level, 1 CPU, 1 GiB memory, and concurrency 4. Cloud Storage, Firestore, builds, image storage, logging, and requests may incur usage charges. There is no hard billing cap. Resources remain until removed from Google Cloud.
+Cloud Run scales to zero, with a two-instance scaling limit at both service and revision level, 1 CPU, 1 GiB memory, and concurrency 80, with 60 live streams and one upload-processing request per instance. Cloud Storage, Firestore, builds, image storage, logging, and requests may incur usage charges. There is no hard billing cap. Resources remain until removed from Google Cloud.
 
 ## Custom domain
 

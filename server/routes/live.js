@@ -1,6 +1,22 @@
+import { createLiveStreams } from '../live-streams.js';
 import { HttpError } from '../game.js';
 import { expireLive, getLive, newLive, publicLive, updateLive } from '../live.js';
-export function registerLiveRoutes(app, { store, requireCreator, requireCsrf }) {
+export function registerLiveRoutes(app, { store, requireCreator, requireCsrf, log }) {
+  app.get('/api/games/:gameId/live/:liveId/events', createLiveStreams(store, log));
+  app.post('/api/games/:gameId/live/:liveId/draft', requireCsrf, async (req, res) => {
+    const draft = await store.saveLiveDraft(
+      req.game.id,
+      req.params.liveId,
+      { uid: req.user?.uid, playerId: req.playerId },
+      req.body || {},
+    );
+    res.json({
+      point: draft.point,
+      version: draft.version,
+      round: draft.round,
+      savedAt: draft.savedAt,
+    });
+  });
   const liveActor = (req) => ({ uid: req.user?.uid, playerId: req.playerId });
   const checkedLive = (game, id) => {
     if (game.sharing === false)
@@ -21,16 +37,30 @@ export function registerLiveRoutes(app, { store, requireCreator, requireCsrf }) 
     checkedLive(req.game, req.params.liveId);
     let game = req.game;
     if (expireLive(game) !== game)
-      game = await store.mutateGame(game.id, (g) => {
+      game = await store.mutateLive(game.id, req.params.liveId, (g, drafts) => {
         checkedLive(g, req.params.liveId);
-        return expireLive(g);
+        return expireLive(g, Date.now(), drafts);
       });
-    res.json(publicLive(game, liveActor(req)));
+    const data = publicLive(game, liveActor(req));
+    if (data.joined && game.live.protocolVersion === 2) {
+      const draft = await store.getLiveDraft(game.id, game.live.id, req.playerId);
+      if (draft?.round === game.live.round && !data.me?.guess)
+        data.draft = { point: draft.point, version: draft.version, round: draft.round };
+    }
+    res.json(data);
   });
   app.post('/api/games/:gameId/live/:liveId/:action', requireCsrf, async (req, res) => {
-    const game = await store.mutateGame(req.game.id, (g) => {
+    const game = await store.mutateLive(req.game.id, req.params.liveId, (g, drafts) => {
       checkedLive(g, req.params.liveId);
-      return updateLive(g, req.params.liveId, liveActor(req), req.params.action, req.body || {});
+      return updateLive(
+        g,
+        req.params.liveId,
+        liveActor(req),
+        req.params.action,
+        req.body || {},
+        Date.now(),
+        drafts,
+      );
     });
     res.json(publicLive(game, liveActor(req)));
   });

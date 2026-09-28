@@ -14,12 +14,13 @@ export function reserveTrip(creator, id, now = Date.now()) {
       `You can keep ${LIMITS.activeTrips} trips at a time. Delete a trip from My trips to make room.`,
     );
   trips[id] = { status: 'uploading', createdAt: now, bytes: 0 };
-  return { createdAt: creator?.createdAt || now, trips };
+  return { ...creator, createdAt: creator?.createdAt || now, trips };
 }
 export function creatorUsage(creator) {
   const slots = Object.values(creator?.trips || {});
   return {
     trips: slots.length,
+    nextTripNumber: (creator?.tripSequence ?? slots.filter((s) => s.status === 'ready').length) + 1,
     storageBytes: slots.reduce((total, slot) => total + (slot.bytes || 0), 0),
     limits: LIMITS,
   };

@@ -1,3 +1,4 @@
+import { Standings, ScoreMatrix, RoundCards, ShareActions } from './ResultsPanels';
 import { useEffect, useRef, useState } from 'react';
 import {
   ArrowUpRight,
@@ -15,7 +16,7 @@ import { api, json, formatDistance, copyLink } from './api';
 import Map from './Map';
 import PhotoViewer from './PhotoViewer';
 import MapPanel from './MapPanel';
-import RoundClock from './RoundClock';
+import RoundClock, { enableCountdownAudio } from './RoundClock';
 import CoordinateFields from './CoordinateFields';
 export default function Game({ id, navigate, notify }) {
   const [game, setGame] = useState(null),
@@ -51,6 +52,7 @@ export default function Game({ id, navigate, notify }) {
   }, [run?.completed, id]);
   async function join(e) {
     e.preventDefault();
+    enableCountdownAudio();
     setBusy(true);
     setError('');
     try {
@@ -85,7 +87,7 @@ export default function Game({ id, navigate, notify }) {
     if (busy) return;
     setBusy(true);
     try {
-      if (!run.completed && game.settings.timeLimitSeconds)
+      if (!run.completed)
         setRun(await api(`/games/${id}/round`, json('POST', { round: run.round })));
       setResult(null);
       setPin(null);
@@ -209,64 +211,27 @@ export default function Game({ id, navigate, notify }) {
             {run.score.toLocaleString()}
             <span>/ {(game.rounds * 5000).toLocaleString()} points</span>
           </div>
-          <div className="center-buttons">
-            <button className="button" onClick={() => copyLink(id, notify)}>
-              Share trip <ArrowUpRight size={18} />
-            </button>
-            <button className="button outline" onClick={() => navigate('/')}>
-              Back home
-            </button>
-          </div>
+          <ShareActions id={id} notify={notify} />
+          <button className="button outline" onClick={() => navigate('/')}>
+            Back home
+          </button>
         </div>
-        <div className="results-columns">
-          <section className="panel round-summary">
-            <h2>Round results</h2>
-            {run.results.map((r, i) => (
-              <div className="summary-row" key={i}>
-                <img src={`/api/games/${id}/photos/${i}`} alt={`Photo from round ${i + 1}`} />
-                <div>
-                  <span className="eyebrow">ROUND {i + 1}</span>
-                  <p>{formatDistance(r.distance)} away</p>
-                </div>
-                <strong>
-                  {r.score.toLocaleString()}
-                  <small> pts</small>
-                </strong>
-              </div>
-            ))}
-          </section>
-          <section className="panel leaderboard">
-            <div className="leaderboard-title">
-              <h2>Leaderboard</h2>
-              <Trophy size={23} />
-            </div>
-            {board.length ? (
-              board.map((entry, i) => (
-                <div key={`${entry.name}-${i}`} className="leaderboard-row">
-                  <span className={`rank ${i === 0 ? 'first' : ''}`}>
-                    {i === 0 ? <Trophy size={16} /> : String(i + 1).padStart(2, '0')}
-                  </span>
-                  <b>{entry.name}</b>
-                  <span>
-                    {entry.score.toLocaleString()} <small>pts</small>
-                  </span>
-                </div>
-              ))
-            ) : (
-              <p className="small-note">Scores appear here when players finish.</p>
-            )}
-            <button
-              className="text-button"
-              onClick={() =>
-                api(`/games/${id}/leaderboard`)
-                  .then(setBoard)
-                  .catch((e) => notify(e.message))
-              }
-            >
-              Refresh scores <ArrowRight size={15} />
-            </button>
-          </section>
-        </div>
+        <RoundCards id={id} results={run.results} />
+        <section className="panel results-section">
+          <h2>Leaderboard</h2>
+          <Standings rows={board} meId={run.publicId} />
+          <button
+            className="text-button"
+            onClick={() =>
+              api(`/games/${id}/leaderboard`)
+                .then(setBoard)
+                .catch((e) => notify(e.message))
+            }
+          >
+            Refresh scores
+          </button>
+        </section>
+        <ScoreMatrix rows={board} rounds={game.rounds} meId={run.publicId} />
       </main>
     );
   const round = result ? result.round : run.round;
@@ -290,6 +255,7 @@ export default function Game({ id, navigate, notify }) {
             <RoundClock
               deadline={run.deadline}
               serverNow={run.serverNow}
+              clockOffsetMs={run.clockOffsetMs}
               onExpire={() => guess(true)}
             />
           )}

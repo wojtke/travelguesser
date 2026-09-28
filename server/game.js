@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { DEMO_ID, DEMO_RETENTION_MS } from './demo-retention.js';
 export class HttpError extends Error {
   constructor(status, message) {
@@ -42,7 +43,7 @@ export function scoreGuess(distance) {
   return Math.round(5000 * Math.exp(-distance / 1500));
 }
 
-export const ROUND_TIMES = [0, 15, 30, 60, 90, 120, 180, 300];
+export const validSeconds = (value) => Number.isInteger(value) && value >= 1 && value <= 3600;
 export function gameSettings(value = {}) {
   if (!value || typeof value !== 'object' || Array.isArray(value))
     throw new HttpError(400, 'Invalid game settings.');
@@ -50,13 +51,22 @@ export function gameSettings(value = {}) {
     mode: value.mode ?? 'solo',
     timeLimitSeconds: value.timeLimitSeconds ?? 0,
     shufflePhotos: value.shufflePhotos ?? false,
+    timerMode: value.timerMode ?? (value.timeLimitSeconds ? 'fixed' : 'none'),
+    afterFirstLockSeconds: value.afterFirstLockSeconds ?? 15,
+    nextRoundControl: value.nextRoundControl ?? 'host',
   };
   if (
     !['solo', 'live'].includes(settings.mode) ||
-    !ROUND_TIMES.includes(settings.timeLimitSeconds) ||
+    !['none', 'fixed', 'afterFirstLock'].includes(settings.timerMode) ||
+    !(settings.timeLimitSeconds === 0 || validSeconds(settings.timeLimitSeconds)) ||
+    (settings.timerMode === 'fixed' && !validSeconds(settings.timeLimitSeconds)) ||
+    (settings.timerMode === 'afterFirstLock' && settings.mode !== 'live') ||
+    !validSeconds(settings.afterFirstLockSeconds) ||
+    !['host', 'anyPlayer'].includes(settings.nextRoundControl) ||
     typeof settings.shufflePhotos !== 'boolean'
   )
     throw new HttpError(400, 'Choose a valid game mode, timer, and photo order.');
+  if (settings.timerMode !== 'fixed') settings.timeLimitSeconds = 0;
   return settings;
 }
 export function photoOrder(game, shuffled = game.settings?.shufflePhotos) {
@@ -72,6 +82,7 @@ export function newRun(game, name, now = Date.now()) {
   return {
     ...(game.id === DEMO_ID ? { demoExpiresAt: new Date(now + DEMO_RETENTION_MS) } : {}),
     name,
+    publicId: randomBytes(12).toString('base64url'),
     score: 0,
     results: [],
     completed: false,
@@ -110,6 +121,11 @@ export function applyGuess(game, run, input, now = Date.now()) {
   const distance = guess ? distanceKm(guess, actual) : null;
   const result = {
     round: input.round,
+    photoIndex: run.order?.[input.round] ?? input.round,
+    durationMs: run.roundStartedAt
+      ? Math.max(0, (expired ? roundDeadline(game, run) : now) - run.roundStartedAt)
+      : null,
+    submittedAt: expired ? roundDeadline(game, run) : now,
     guess,
     actual,
     distance,
@@ -152,11 +168,12 @@ export function publicRun(game, run) {
     score: run.score,
     results: run.results,
     completed: run.completed,
+    finishedAt: run.finishedAt ?? null,
+    publicId: run.publicId ?? null,
     round: run.results.length,
     deadline: roundDeadline(game, run),
     serverNow: Date.now(),
-    awaitingNext:
-      !!game.settings?.timeLimitSeconds && run.roundStartedAt === null && !run.completed,
+    awaitingNext: run.roundStartedAt === null && !run.completed,
     photoUrl: run.completed ? null : `/api/games/${game.id}/photos/${run.results.length}`,
   };
 }

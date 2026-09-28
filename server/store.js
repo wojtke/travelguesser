@@ -1,3 +1,5 @@
+import { installStoreFeatures } from './store-features.js';
+import { defaultTripTitle, resultSummary } from './results.js';
 import { DEMO_ID, demoExpiry, retainedRun } from './demo-retention.js';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
@@ -30,6 +32,9 @@ export class LocalStore {
       const data = JSON.parse(await fs.readFile(path.join(this.directory, 'data.json'), 'utf8'));
       for (const [key, run] of Object.entries(data.runs))
         if (!retainedRun(run.gameId, run)) delete data.runs[key];
+      for (const collection of ['liveDrafts', 'sharedResults'])
+        for (const [key, value] of Object.entries(data[collection] || {}))
+          if (new Date(value.expiresAt).getTime() <= Date.now()) delete data[collection][key];
       return data;
     } catch (e) {
       if (e.code !== 'ENOENT') throw e;
@@ -44,6 +49,7 @@ export class LocalStore {
       const target = path.join(this.directory, 'data.json');
       await fs.writeFile(`${target}.tmp`, JSON.stringify(data));
       await fs.rename(`${target}.tmp`, target);
+      this.events?.emit('change', data);
       return result;
     });
     this.queue = task.catch(() => {});
@@ -88,6 +94,13 @@ export class LocalStore {
       checkOwner(game, uid);
       if (!game || game.status !== 'uploading' || !slot)
         throw new HttpError(409, 'This upload expired. Please try again.');
+      const creator = d.creators[uid];
+      creator.tripSequence =
+        (creator.tripSequence ??
+          Object.values(creator.trips).filter((s) => s.status === 'ready').length) + 1;
+      if (game.autoTitle) game.title = defaultTripTitle(game.titleFirstName, creator.tripSequence);
+      delete game.autoTitle;
+      delete game.titleFirstName;
       slot.status = 'ready';
       slot.bytes = bytes;
       Object.assign(game, { status: 'ready', storageBytes: bytes });
@@ -127,7 +140,7 @@ export class LocalStore {
       .filter((r) => r.gameId === gameId && r.completed)
       .sort((a, b) => b.score - a.score || a.finishedAt - b.finishedAt)
       .slice(0, 20)
-      .map(({ name, score, finishedAt }) => ({ name, score, finishedAt }));
+      .map(resultSummary);
   }
   async deleteGame(id, uid) {
     await this.mutate((d) => {
@@ -140,6 +153,9 @@ export class LocalStore {
     await this.mutate((d) => {
       checkOwner(d.games[id], uid);
       delete d.games[id];
+      for (const collection of ['liveDrafts', 'sharedResults'])
+        for (const key of Object.keys(d[collection] || {}))
+          if (key.startsWith(`${id}:`)) delete d[collection][key];
       if (d.creators?.[uid]) delete d.creators[uid].trips[id];
       for (const key of Object.keys(d.runs)) if (key.startsWith(`${id}:`)) delete d.runs[key];
     });
@@ -222,6 +238,12 @@ export class CloudStore {
       checkOwner(game, uid);
       if (!game || game.status !== 'uploading' || !slot)
         throw new HttpError(409, 'This upload expired. Please try again.');
+      creator.tripSequence =
+        (creator.tripSequence ??
+          Object.values(creator.trips).filter((s) => s.status === 'ready').length) + 1;
+      if (game.autoTitle) game.title = defaultTripTitle(game.titleFirstName, creator.tripSequence);
+      delete game.autoTitle;
+      delete game.titleFirstName;
       slot.status = 'ready';
       slot.bytes = bytes;
       const ready = { ...game, status: 'ready', storageBytes: bytes };
@@ -268,9 +290,7 @@ export class CloudStore {
       if (updated.run.completed) {
         const { name, score, finishedAt } = updated.run;
         t.set(this.gameRef(game.id).collection('leaderboard').doc(playerId), {
-          name,
-          score,
-          finishedAt,
+          ...resultSummary(updated.run),
           ...(game.id === DEMO_ID ? { demoExpiresAt: new Date(demoExpiry(updated.run)) } : {}),
         });
       }
@@ -290,7 +310,14 @@ export class CloudStore {
       for (const doc of page.docs) {
         const row = doc.data();
         if (retainedRun(gameId, row))
-          rows.push({ name: row.name, score: row.score, finishedAt: row.finishedAt });
+          rows.push({
+            id: row.id ?? null,
+            name: row.name,
+            score: row.score,
+            finishedAt: row.finishedAt,
+            durationMs: row.durationMs ?? null,
+            rounds: row.rounds || [],
+          });
       }
       cursor = page.size === 20 ? page.docs.at(-1) : null;
     } while (gameId === DEMO_ID && cursor && rows.length < 20 && scanned < 100);
@@ -333,3 +360,5 @@ export class CloudStore {
     return buffer;
   }
 }
+
+installStoreFeatures(LocalStore, CloudStore);

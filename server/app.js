@@ -1,3 +1,4 @@
+import { defaultTripTitle, publicSharedResult } from './results.js';
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
@@ -116,6 +117,14 @@ export function createApp({
   };
   app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
   app.use('/api', async (req, res, next) => {
+    // A pair of timestamps lets clients exclude authentication/database work
+    // from clock synchronization rather than mistaking it for network latency.
+    res.set('X-TripGuessr-Received-At', String(Date.now()));
+    const sendJson = res.json;
+    res.json = function (body) {
+      this.set('X-TripGuessr-Sent-At', String(Date.now()));
+      return sendJson.call(this, body);
+    };
     res.set('Cache-Control', 'no-store');
     if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
       const origin = req.get('origin');
@@ -205,6 +214,29 @@ export function createApp({
       res.json({ places: await searchLocations(req.body?.query) });
     },
   );
+  let processingUpload = false;
+  const admitUpload = (req, res, next) => {
+    if (processingUpload)
+      return res
+        .status(429)
+        .set('Retry-After', '2')
+        .json({ error: 'Another upload is processing. Please retry in a moment.' });
+    processingUpload = true;
+    let done = false;
+    const release = () => {
+      if (!done) {
+        done = true;
+        processingUpload = false;
+      }
+    };
+    req.releaseUpload = release;
+    const releaseIdle = () => {
+      if (!req.processingPhotos) release();
+    };
+    res.once('finish', releaseIdle);
+    res.once('close', releaseIdle);
+    next();
+  };
   const upload = multer({
     storage: multer.memoryStorage(),
     limits: { files: 12, fileSize: 2 * 1024 * 1024, fields: 1, fieldSize: 32 * 1024, parts: 13 },
@@ -223,75 +255,85 @@ export function createApp({
     requireCreator,
     requireCsrf,
     uploadLimiter,
+    admitUpload,
     upload.array('photos', 12),
     async (req, res) => {
-      let meta;
+      req.processingPhotos = true;
       try {
-        meta = JSON.parse(req.body.metadata);
-      } catch {
-        throw new HttpError(400, 'The game details could not be read.');
-      }
-      if (!meta || typeof meta !== 'object' || Array.isArray(meta))
-        throw new HttpError(400, 'The game details could not be read.');
-      const title = cleanText(meta.title, 80, 'Trip title');
-      const hostName = cleanText(meta.hostName, 30, 'Your name');
-      const settings = gameSettings(meta.settings);
-      if (
-        !req.files?.length ||
-        req.files.length > 12 ||
-        !Array.isArray(meta.photos) ||
-        req.files.length !== meta.photos.length
-      ) {
-        throw new HttpError(400, 'Add between 1 and 12 photos, each with a location.');
-      }
-      const photos = meta.photos.map((p, i) => ({
-        ...coordinates(p),
-        caption: typeof p.caption === 'string' ? p.caption.trim().slice(0, 200) : '',
-        key: `${i}.jpg`,
-      }));
-      const id = randomBytes(16).toString('base64url');
-      const ownerUid = req.user.uid;
-      await store.beginGame({
-        id,
-        title,
-        hostName,
-        photos,
-        ownerUid,
-        settings,
-        sharing: true,
-        createdAt: Date.now(),
-      });
-      let storageBytes = 0;
-      try {
-        for (const [i, file] of req.files.entries()) {
-          let buffer;
-          try {
-            buffer = await sharp(file.buffer, { limitInputPixels: 40_000_000 })
-              .rotate()
-              .resize({ width: 1800, height: 1800, fit: 'inside', withoutEnlargement: true })
-              .jpeg({ quality: 85 })
-              .toBuffer();
-          } catch {
-            throw new HttpError(400, `Photo ${i + 1} could not be read. Use JPG, PNG, or WebP.`);
-          }
-          if (buffer.length > LIMITS.photoBytes)
-            throw new HttpError(
-              400,
-              `Photo ${i + 1} is too detailed. Please choose a smaller image.`,
-            );
-          storageBytes += buffer.length;
-          await store.savePhoto(id, `${i}.jpg`, buffer);
+        let meta;
+        try {
+          meta = JSON.parse(req.body.metadata);
+        } catch {
+          throw new HttpError(400, 'The game details could not be read.');
         }
-        let game = await store.publishGame(id, ownerUid, storageBytes);
-        if (settings.mode === 'live') game = await store.mutateGame(id, (g) => newLive(g));
-        res.status(201).json(publicGame(game));
-      } catch (e) {
-        await store
-          .deleteGame(id, ownerUid)
-          .catch((cleanup) =>
-            log({ event: 'upload_cleanup_failed', severity: 'ERROR', ...errorDetails(cleanup) }),
-          );
-        throw e;
+        if (!meta || typeof meta !== 'object' || Array.isArray(meta))
+          throw new HttpError(400, 'The game details could not be read.');
+        const autoTitle = meta.autoTitle === true;
+        const title = autoTitle
+          ? defaultTripTitle(req.user.name, 1)
+          : cleanText(meta.title, 80, 'Trip title');
+        const hostName = cleanText(meta.hostName, 30, 'Your name');
+        const settings = gameSettings(meta.settings);
+        if (
+          !req.files?.length ||
+          req.files.length > 12 ||
+          !Array.isArray(meta.photos) ||
+          req.files.length !== meta.photos.length
+        ) {
+          throw new HttpError(400, 'Add between 1 and 12 photos, each with a location.');
+        }
+        const photos = meta.photos.map((p, i) => ({
+          ...coordinates(p),
+          caption: typeof p.caption === 'string' ? p.caption.trim().slice(0, 200) : '',
+          key: `${i}.jpg`,
+        }));
+        const id = randomBytes(16).toString('base64url');
+        const ownerUid = req.user.uid;
+        await store.beginGame({
+          id,
+          title,
+          hostName,
+          photos,
+          ownerUid,
+          ...(autoTitle ? { autoTitle: true, titleFirstName: req.user.name || '' } : {}),
+          settings,
+          sharing: true,
+          createdAt: Date.now(),
+        });
+        let storageBytes = 0;
+        try {
+          for (const [i, file] of req.files.entries()) {
+            let buffer;
+            try {
+              buffer = await sharp(file.buffer, { limitInputPixels: 40_000_000 })
+                .rotate()
+                .resize({ width: 1800, height: 1800, fit: 'inside', withoutEnlargement: true })
+                .jpeg({ quality: 85 })
+                .toBuffer();
+            } catch {
+              throw new HttpError(400, `Photo ${i + 1} could not be read. Use JPG, PNG, or WebP.`);
+            }
+            if (buffer.length > LIMITS.photoBytes)
+              throw new HttpError(
+                400,
+                `Photo ${i + 1} is too detailed. Please choose a smaller image.`,
+              );
+            storageBytes += buffer.length;
+            await store.savePhoto(id, `${i}.jpg`, buffer);
+          }
+          let game = await store.publishGame(id, ownerUid, storageBytes);
+          if (settings.mode === 'live') game = await store.mutateGame(id, (g) => newLive(g));
+          res.status(201).json(publicGame(game));
+        } catch (e) {
+          await store
+            .deleteGame(id, ownerUid)
+            .catch((cleanup) =>
+              log({ event: 'upload_cleanup_failed', severity: 'ERROR', ...errorDetails(cleanup) }),
+            );
+          throw e;
+        }
+      } finally {
+        req.releaseUpload();
       }
     },
   );
@@ -324,7 +366,25 @@ export function createApp({
     });
     res.json(publicGame(game));
   });
-  registerLiveRoutes(app, { store, requireCreator, requireCsrf });
+  registerLiveRoutes(app, { store, requireCreator, requireCsrf, log });
+  app.post('/api/games/:gameId/results/share', requireCsrf, async (req, res) => {
+    const source = req.body?.source;
+    if (typeof source !== 'string' || !(/^[a-zA-Z0-9_-]{8,40}$/.test(source) || source === 'solo'))
+      throw new HttpError(400, 'Invalid result source.');
+    const { token } = await store.createSharedResult(
+      req.game.id,
+      { uid: req.user?.uid, playerId: req.playerId },
+      source,
+    );
+    res.json({ url: `/g/${req.game.id}/results/${token}` });
+  });
+  app.get('/api/games/:gameId/results/:token', async (req, res) => {
+    if (req.game.sharing === false) throw new HttpError(403, 'Sharing is paused for this trip.');
+    if (!validId.test(req.params.token)) throw new HttpError(404, 'Result not found.');
+    const record = await store.getSharedResult(req.game.id, req.params.token);
+    if (!record) throw new HttpError(404, 'This shared result has expired or is unavailable.');
+    res.json(publicSharedResult(record));
+  });
   app.delete('/api/games/:gameId', requireCreator, requireCsrf, async (req, res) => {
     if (req.game.demo) throw new HttpError(400, 'The demo cannot be deleted.');
     if (req.game.ownerUid !== req.user.uid)

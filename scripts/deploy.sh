@@ -37,6 +37,10 @@ done
 for COLLECTION in runs leaderboard; do
   gcloud firestore fields ttls update demoExpiresAt --collection-group="$COLLECTION" --enable-ttl --async --project="$PROJECT_ID" --quiet
 done
+# Live drafts expire with their lobby; opt-in shared results expire after 30 days.
+for COLLECTION in liveDrafts sharedResults; do
+  gcloud firestore fields ttls update expiresAt --collection-group="$COLLECTION" --enable-ttl --async --project="$PROJECT_ID" --quiet
+done
 gcloud storage buckets describe "gs://${BUCKET}" --project="$PROJECT_ID" >/dev/null 2>&1 ||
   gcloud storage buckets create "gs://${BUCKET}" --location="$REGION" --uniform-bucket-level-access --public-access-prevention --project="$PROJECT_ID" --quiet
 
@@ -67,7 +71,7 @@ gcloud run deploy "$SERVICE" --source=. --region="$REGION" --project="$PROJECT_I
   --service-account="$RUNTIME_SA" \
   --build-service-account="projects/${PROJECT_ID}/serviceAccounts/${BUILD_SA}" \
   --env-vars-file=.local/runtime-env.json --remove-secrets=HOST_KEY \
-  --allow-unauthenticated --port=8080 --memory=1Gi --cpu=1 --concurrency=4 \
+  --allow-unauthenticated --port=8080 --memory=1Gi --cpu=1 --concurrency=80 \
   --min-instances=0 --max-instances=2 --max=2 --timeout=60 --cpu-throttling --quiet
 
 gcloud run services describe "$SERVICE" --region="$REGION" --project="$PROJECT_ID" --format='value(status.url)' > .local/service-url.txt

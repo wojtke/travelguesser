@@ -27,6 +27,7 @@ const host = { uid: 'creator', playerId: 'host' },
   bob = { playerId: 'bob' };
 function lobby(timeLimitSeconds = 15) {
   let g = newLive(sample, { timeLimitSeconds }, 1000);
+  delete g.live.protocolVersion; // Existing lobbies keep the immediate-start protocol.
   g = updateLive(g, g.live.id, alice, 'join', { name: 'Alice' }, 1001);
   return updateLive(g, g.live.id, bob, 'join', { name: 'Bob' }, 1002);
 }
@@ -183,6 +184,10 @@ test('HTTP live flow persists concurrent guesses, protects media and host action
   await b.post(`${base}/join`).send({ name: 'B' }).expect(200);
   await a.post(`${base}/start`).send({ round: 0 }).expect(403);
   await a.get(`${base}/photos/0`).expect(403);
+  await store.mutateGame(id, (g) => {
+    delete g.live.protocolVersion;
+    return g;
+  });
   await owner.post(`${base}/start`).send({ round: 0 }).expect(200);
   await outsider.get(`${base}/photos/0`).expect(403);
   await a.get(`${base}/photos/1`).expect(403);

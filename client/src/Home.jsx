@@ -23,6 +23,7 @@ export default function Home({ host, create, navigate, notify }) {
     [lobbySettings, setLobbySettings] = useState({
       ...defaultSettings,
       mode: 'live',
+      timerMode: 'fixed',
       timeLimitSeconds: 60,
     }),
     [hostBusy, setHostBusy] = useState(false);
@@ -43,6 +44,7 @@ export default function Home({ host, create, navigate, notify }) {
       ...defaultSettings,
       ...game.settings,
       mode: 'live',
+      timerMode: game.settings?.timerMode === 'afterFirstLock' ? 'afterFirstLock' : 'fixed',
       timeLimitSeconds: game.settings?.timeLimitSeconds || 60,
     });
     setHosting(game);

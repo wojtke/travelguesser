@@ -86,3 +86,9 @@ PROJECT_ID=your-project-id node scripts/configure-observability.mjs --apply --ex
 ```
 
 The script reuses existing resources by name. An existing alert recipient is preserved when `ALERT_EMAIL` is omitted. Cloudflare's matching configuration is in `cloudflare/wrangler.jsonc`; keep **invocation_logs=false** on future deployments. Monitor Cloudflare's account-wide 100,000 daily request ceiling in its dashboard; this setup does not alert on that separate provider quota.
+
+## Live update release
+
+SSE connections appear as the fixed `/api/games/:trip/live/:lobby/events` route and normally last up to 45 seconds. Their durations are expected and can dominate native request latency percentiles; they are not 45-second page loads. Inspect sanitized route-level logs for ordinary request latency. Draft and readiness requests have fixed route templates; shared-result tokens are redacted too. No coordinates or player identifiers are added to telemetry.
+
+Watch billable instance time, memory, 429s, Firestore writes/reads and `live_stream_failed` / `live_transition_failed` errors. Browser reconnects count as requests; draft saves are not counted as confirmed guesses. Streams disconnect when hidden, removed, paused, expired or finished, with polling fallback. Admission is 60 streams/instance and 2/identity; high connection counts can still affect command latency. Load testing and cost assumptions are documented in COSTS-AND-LIMITS.md.

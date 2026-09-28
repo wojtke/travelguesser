@@ -4,8 +4,8 @@ import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 // These counters are per process, not a billing cap. Keep generous network
 // headroom for a full lobby on one Wi-Fi connection (20 polls/min per player).
 export function createRequestLimits({
-  networkLimit = 900,
-  totalLimit = 3000,
+  networkLimit = 3000,
+  totalLimit = 6000,
   playerLimit = 500,
   liveLimit = 45,
 } = {}) {
@@ -32,10 +32,13 @@ export function createRequestLimits({
     keyGenerator: (req) => req.playerId,
   });
   const live = rateLimit({ ...common, limit: liveLimit, keyGenerator: (req) => req.playerId });
+  const drafts = rateLimit({ ...common, limit: 120, keyGenerator: (req) => req.playerId });
   // Run on /api before app.param('gameId'), so rejected polls never read Firestore.
   const gameplay = (req, res, next) =>
-    /^\/games\/[^/]+\/live\/[^/]+(?:\/[^/]+)?$/.test(req.path) && !req.path.endsWith('/photos')
-      ? live(req, res, next)
-      : player(req, res, next);
+    req.method === 'POST' && /\/live\/[^/]+\/draft$/.test(req.path)
+      ? drafts(req, res, next)
+      : /^\/games\/[^/]+\/live\/[^/]+(?:\/[^/]+)?$/.test(req.path) && !req.path.endsWith('/photos')
+        ? live(req, res, next)
+        : player(req, res, next);
   return { early: [total, network], gameplay };
 }

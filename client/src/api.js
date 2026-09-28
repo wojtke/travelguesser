@@ -1,5 +1,6 @@
 let csrfToken = '';
 export async function api(path, options = {}) {
+  const sentAt = Date.now();
   const response = await fetch(`/api${path}`, {
     ...options,
     headers: {
@@ -13,6 +14,15 @@ export async function api(path, options = {}) {
   const body = await response
     .json()
     .catch(() => ({ error: 'The server could not be reached. Please try again.' }));
+  const receivedAt = Date.now();
+  const serverReceived = Number(response.headers.get('X-TripGuessr-Received-At'));
+  const serverSent = Number(response.headers.get('X-TripGuessr-Sent-At'));
+  for (const value of [body, body.run])
+    if (value?.serverNow)
+      value.clockOffsetMs =
+        serverReceived && serverSent
+          ? (serverReceived - sentAt + (serverSent - receivedAt)) / 2
+          : value.serverNow - (sentAt + receivedAt) / 2;
   if (body.csrfToken) csrfToken = body.csrfToken;
   if (!response.ok) {
     const error = new Error(body.error || 'Something went wrong.');
@@ -61,7 +71,7 @@ export async function preparePhoto(file) {
 export async function copyLink(id, notify) {
   try {
     await navigator.clipboard.writeText(`${location.origin}/g/${id}`);
-    notify('Trip link copied.');
+    notify('Trip invitation copied — it does not include your results.');
   } catch {
     notify('Copy the trip link from your address bar or the share box.');
   }

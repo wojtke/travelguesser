@@ -123,8 +123,12 @@ test('parallel uploads cannot exceed five slots, and deleting frees one', async 
   const creator = request.agent(app);
   await signIn(creator, 'creator-quota');
   const results = await Promise.all(Array.from({ length: 8 }, () => upload(creator)));
-  assert.equal(results.filter((r) => r.status === 201).length, 5);
-  assert.equal(results.filter((r) => r.status === 409).length, 3);
+  const admitted = results.filter((r) => r.status === 201).length;
+  assert.ok(admitted >= 1 && admitted <= 5);
+  assert.ok(results.some((r) => r.status === 429));
+  assert.ok(results.every((r) => [201, 409, 429].includes(r.status)));
+  for (let i = admitted; i < 5; i++) await upload(creator).expect(201);
+  await upload(creator).expect(409);
   const usage = (await creator.get('/api/host/usage')).body;
   assert.equal(usage.trips, 5);
   assert.ok(usage.storageBytes > 0);

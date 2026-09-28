@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ZoomIn, ZoomOut, Scan } from 'lucide-react';
 
-export default function PhotoViewer({ src, alt }) {
+export default function PhotoViewer({ src, alt, onReady }) {
   const viewport = useRef(null),
     scale = useRef(1),
     anchor = useRef(null),
@@ -100,7 +100,17 @@ export default function PhotoViewer({ src, alt }) {
         }}
       >
         <div className="photo-canvas" style={{ width: `${zoom * 100}%`, height: `${zoom * 100}%` }}>
-          <img src={src} alt={alt} draggable={false} />
+          <img
+            src={src}
+            onLoad={(e) => {
+              e.currentTarget
+                .decode()
+                .then(() => onReady?.())
+                .catch(() => {});
+            }}
+            alt={alt}
+            draggable={false}
+          />
         </div>
       </div>
       <div className="photo-tools" aria-label="Photo zoom controls">

@@ -1,125 +1,43 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  ArrowLeft,
-  ArrowRight,
-  Check,
-  Copy,
-  LoaderCircle,
-  MapPin,
-  Users,
-  Trophy,
-  X,
-} from 'lucide-react';
-import { api, json, formatDistance } from './api';
+import { useEffect, useState } from 'react';
+import { ArrowLeft, ArrowRight, MapPin, Users, Copy, LoaderCircle } from 'lucide-react';
+import useLiveSession from './useLiveSession';
+import { formatDistance } from './api';
 import Map, { playerColors } from './Map';
 import PhotoViewer from './PhotoViewer';
 import MapPanel from './MapPanel';
-import RoundClock from './RoundClock';
-
+import RoundClock, { enableCountdownAudio } from './RoundClock';
+import { Standings, ScoreMatrix, ShareActions, RoundCards, duration } from './ResultsPanels';
 export default function LiveGame({ id, liveId, navigate, notify }) {
-  const [live, setLive] = useState(null),
-    [error, setError] = useState(''),
-    [fatal, setFatal] = useState(false),
-    [busy, setBusy] = useState(false);
+  const { live, error, fatal, busy, pin, setPin, saveStatus, retrySave, action, refresh, ready } =
+    useLiveSession(id, liveId);
   const [name, setName] = useState(''),
-    [pin, setPin] = useState(null);
-  const working = useRef(false),
-    mounted = useRef(true),
-    polling = useRef(false),
-    stopped = useRef(false),
-    base = `/games/${id}/live/${liveId}`;
-  const accept = useCallback((data) => {
-    if (mounted.current) {
-      setLive((old) =>
-        !old || data.revision > old.revision || data.isHost !== old.isHost ? data : old,
-      );
-      setError('');
-      if (data.phase === 'finished' || (data.me && !data.me.active && !data.isHost))
-        stopped.current = true;
-    }
+    [now, setNow] = useState(Date.now()),
+    [loadedRound, setLoadedRound] = useState(-1),
+    [mapFilter, setMapFilter] = useState('all');
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 100);
+    return () => clearInterval(t);
   }, []);
-  const refresh = useCallback(
-    async (signal) => {
-      if (polling.current || stopped.current) return;
-      polling.current = true;
-      try {
-        accept(await api(base, { signal }));
-      } catch (e) {
-        if (e.name === 'AbortError' || !mounted.current) return;
-        setError(e.message);
-        if ([403, 404, 410].includes(e.status)) {
-          setFatal(true);
-          stopped.current = true;
-        }
-      } finally {
-        polling.current = false;
-      }
-    },
-    [base, accept],
-  );
-  useEffect(() => {
-    mounted.current = true;
-    stopped.current = false;
-    let timer,
-      closed = false;
-    const controller = new AbortController();
-    async function poll() {
-      if (!document.hidden) await refresh(controller.signal);
-      if (!closed && !stopped.current) timer = setTimeout(poll, 3000);
-    }
-    poll();
-    // A focus refresh is useful after returning from a chat app with the invite link.
-    const focus = () => {
-      if (!closed && !document.hidden) refresh(controller.signal);
-    };
-    window.addEventListener('focus', focus);
-    document.addEventListener('visibilitychange', focus);
-    return () => {
-      closed = true;
-      mounted.current = false;
-      clearTimeout(timer);
-      controller.abort();
-      window.removeEventListener('focus', focus);
-      document.removeEventListener('visibilitychange', focus);
-    };
-  }, [refresh]);
-  useEffect(() => {
-    setPin(null);
-  }, [live?.round]);
-  async function action(type, body = {}) {
-    if (working.current) return;
-    working.current = true;
-    setBusy(true);
-    setError('');
-    try {
-      const data = await api(`${base}/${type}`, json('POST', { round: live?.round, ...body }));
-      accept(data);
-    } catch (e) {
-      setError(e.message);
-      if ([403, 404, 410].includes(e.status)) refresh();
-    } finally {
-      working.current = false;
-      if (mounted.current) setBusy(false);
-    }
-  }
-  const canGuess = live?.phase === 'round' && live.me?.active && !live.me.guess;
+  const preparing = live?.phase === 'preparing' && now + (live.clockOffsetMs || 0) < live.startsAt;
+  const canGuess =
+    live &&
+    ['preparing', 'round'].includes(live.phase) &&
+    !preparing &&
+    live.me?.active &&
+    !live.me.guess;
   useEffect(() => {
     if (!canGuess || !pin || busy) return;
     const key = (e) => {
       if (
-        (e.code !== 'Space' && e.key !== ' ') ||
+        e.code !== 'Space' ||
         e.repeat ||
         e.altKey ||
         e.ctrlKey ||
         e.metaKey ||
         e.shiftKey ||
-        e.defaultPrevented
-      )
-        return;
-      if (
-        e.target instanceof Element &&
-        e.target.closest(
-          'input,textarea,select,button,a,summary,[contenteditable="true"],[role="button"],[role="dialog"]',
+        e.defaultPrevented ||
+        e.target.closest?.(
+          'input,textarea,select,button,a,summary,[contenteditable],[role="dialog"]',
         )
       )
         return;
@@ -129,21 +47,13 @@ export default function LiveGame({ id, liveId, navigate, notify }) {
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
   }, [canGuess, pin, busy, live?.round]);
-  const invite = async () => {
-    try {
-      await navigator.clipboard.writeText(location.href);
-      notify('Lobby link copied.');
-    } catch {
-      notify('Copy the lobby link from the address bar.');
-    }
-  };
   if (fatal)
     return (
       <main className="narrow-page">
-        <h1>Lobby unavailable</h1>
-        <p role="alert">{error}</p>
+        <h1>{fatal}</h1>
+        <p>Your access to this session has ended.</p>
         <button className="button" onClick={() => navigate('/')}>
-          Back to my trips
+          Back home
         </button>
       </main>
     );
@@ -152,12 +62,8 @@ export default function LiveGame({ id, liveId, navigate, notify }) {
       <main className="narrow-page">
         {error ? (
           <>
-            <p className="error" role="alert">
-              {error}
-            </p>
-            <button className="button" onClick={() => refresh()}>
-              Try again
-            </button>
+            <p role="alert">{error}</p>
+            <button onClick={refresh}>Try again</button>
           </>
         ) : (
           <>
@@ -166,21 +72,20 @@ export default function LiveGame({ id, liveId, navigate, notify }) {
         )}
       </main>
     );
-  if (live.me && !live.me.active && !live.isHost)
-    return (
-      <main className="narrow-page">
-        <h1>You are no longer in this lobby</h1>
-        <p>Your access to this session has ended.</p>
-        <button className="button" onClick={() => navigate('/')}>
-          Back home
-        </button>
-      </main>
-    );
+  const invite = async () => {
+    try {
+      await navigator.clipboard.writeText(location.href);
+      notify('Live lobby invitation copied.');
+    } catch {
+      notify('Copy the lobby URL from the address bar.');
+    }
+  };
   const joinForm = (
     <form
       className="live-join"
       onSubmit={(e) => {
         e.preventDefault();
+        enableCountdownAudio();
         action('join', { name });
       }}
     >
@@ -193,57 +98,41 @@ export default function LiveGame({ id, liveId, navigate, notify }) {
           value={name}
           onChange={(e) => setName(e.target.value)}
           autoComplete="nickname"
-          placeholder="Name shown to the group"
         />
         <button className="button" disabled={busy}>
-          <Users size={18} /> Join lobby
+          Join lobby
         </button>
       </div>
     </form>
   );
+  const errors = error && (
+    <p className="error" role="alert">
+      {error}
+    </p>
+  );
+  const timing =
+    live.settings.timerMode === 'afterFirstLock'
+      ? `${live.settings.afterFirstLockSeconds}s after the first confirmation`
+      : live.settings.timeLimitSeconds
+        ? `${live.settings.timeLimitSeconds}s per photo`
+        : 'No time limit';
   if (!live.joined && !live.isHost)
     return (
-      <main className="narrow-page live-intro">
-        <span className="pill">
-          <Users size={16} /> Live game · {live.playerCount} joined
-        </span>
+      <main className="narrow-page">
         <h1>{live.title}</h1>
         <p>
-          Hosted by {live.hostName}. {live.rounds} photos ·{' '}
-          {live.settings.timeLimitSeconds
-            ? `${live.settings.timeLimitSeconds} seconds per photo`
-            : 'No time limit'}
-          .
+          Hosted by {live.hostName} · {live.playerCount} players · {timing}
         </p>
         {live.phase === 'lobby' ? (
-          <>
-            <p>
-              The host starts each round. Guesses stay hidden until everyone submits or time runs
-              out.
-            </p>
-            {joinForm}
-          </>
+          joinForm
         ) : (
           <p>This game has already started. Ask the host for the next lobby link.</p>
         )}
-        {error && (
-          <p className="error" role="alert">
-            {error}
-          </p>
-        )}
-        <p className="small-note">
-          No account needed. Your nickname and results are visible to this group.{' '}
-          <a href="/privacy">Privacy notice</a>
-        </p>
+        {errors}
       </main>
     );
   const active = live.players.filter((p) => p.active),
     submitted = active.filter((p) => p.submitted).length;
-  const errors = error && (
-    <p className="error live-error" role="alert">
-      {error} · Reconnecting automatically.
-    </p>
-  );
   if (live.phase === 'lobby')
     return (
       <main className="live-page">
@@ -252,75 +141,69 @@ export default function LiveGame({ id, liveId, navigate, notify }) {
         </button>
         <div className="live-title">
           <div>
-            <span className="pill">
-              <Users size={16} /> Live lobby
-            </span>
             <h1>{live.title}</h1>
             <p>
-              {live.rounds} photos ·{' '}
-              {live.settings.timeLimitSeconds
-                ? `${live.settings.timeLimitSeconds}s per photo`
-                : 'No time limit'}{' '}
-              · {live.settings.shufflePhotos ? 'Shuffled order' : 'Upload order'}
+              {live.rounds} photos · {timing}
             </p>
           </div>
           <button className="button outline" onClick={invite}>
-            <Copy size={17} /> Invite friends
+            <Copy size={17} /> Invite to lobby
           </button>
         </div>
         <div className="live-lobby-grid">
           <section className="panel live-card">
             <h2>
-              Players{' '}
-              <span>
-                {live.playerCount} / {live.limits.players}
-              </span>
+              Players {live.playerCount} / {live.limits.players}
             </h2>
-            {live.players.length ? (
-              <ul className="lobby-players">
-                {live.players.map((p) => (
-                  <li key={p.id}>
-                    <span>
-                      {p.name}
-                      {p.id === live.me?.id ? ' (you)' : ''}
-                    </span>
-                    {live.isHost && p.id !== live.me?.id && (
-                      <button
-                        className="icon-button"
-                        aria-label={`Remove ${p.name}`}
-                        onClick={() => action('remove', { playerId: p.id })}
-                        disabled={busy}
-                      >
-                        <X size={16} />
-                      </button>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p>Share the link so friends can join.</p>
-            )}
+            <ul className="lobby-players">
+              {live.players.map((p) => (
+                <li key={p.id}>
+                  {p.name}
+                  {p.id === live.me?.id ? ' (You)' : ''}
+                  {live.isHost && p.id !== live.me?.id && (
+                    <button
+                      className="text-button"
+                      onClick={() => action('remove', { playerId: p.id })}
+                    >
+                      Remove
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
             {live.joined ? (
-              <p className="small-note">
-                <Check size={15} /> You’re in.{' '}
-                {live.isHost ? 'Start when everyone is ready.' : 'Waiting for the host to start.'}
-              </p>
+              <p>You’re in. Waiting for the first round.</p>
             ) : (
-              joinForm
+              !live.isHost && joinForm
             )}
           </section>
           <section className="panel live-card">
-            <h2>{live.isHost ? 'Host controls' : 'How it works'}</h2>
-            <p>
-              Everyone gets the same photo. Results show everyone’s pin and distance after all
-              guesses are in{live.settings.timeLimitSeconds ? ' or the timer expires' : ''}. The
-              host starts the next round.
-            </p>
-            {live.isHost && (
+            {live.isHost ? (
               <>
+                <h2>Your role</h2>
+                <label className="checkbox-label">
+                  <input
+                    type="radio"
+                    name="host-role"
+                    checked={!live.joined}
+                    onChange={() => action('leave')}
+                  />
+                  Host only · watch and control the game
+                </label>
+                <label className="checkbox-label">
+                  <input
+                    type="radio"
+                    name="host-role"
+                    checked={live.joined}
+                    onChange={() => {
+                      enableCountdownAudio();
+                      action('join', { name: name.trim() || live.hostName.slice(0, 24) });
+                    }}
+                  />
+                  Host and play
+                </label>
                 <p className="small-note">
-                  You can host without playing, or join above. As the creator, you already know the
-                  locations.
+                  You do not need to play. As the creator, you already know the locations.
                 </p>
                 <button
                   className="button full"
@@ -330,24 +213,55 @@ export default function LiveGame({ id, liveId, navigate, notify }) {
                   Start first round <ArrowRight size={18} />
                 </button>
               </>
+            ) : (
+              <>
+                <h2>How rounds work</h2>
+                <p>
+                  Each round has a five-second preparation period. Your latest saved pin counts if
+                  time runs out.
+                </p>
+              </>
             )}
-            <p className="small-note">
-              Lobby links expire after 24 hours. Only people with the link can enter; links can be
-              forwarded.
+            <p>
+              {live.settings.nextRoundControl === 'anyPlayer'
+                ? 'Any active player can start subsequent rounds.'
+                : 'The host starts each round.'}
             </p>
           </section>
         </div>
         {errors}
       </main>
     );
-  if (live.phase === 'round')
+  if (['preparing', 'round'].includes(live.phase))
     return (
-      <main key={`play-${live.round}`} className="play-page live-play">
+      <main className="play-page live-play">
         <PhotoViewer
-          key={`photo-${live.round}`}
+          key={live.round}
           src={live.photoUrl}
           alt={`Mystery photo for round ${live.round + 1}`}
+          onReady={() => {
+            setLoadedRound(live.round);
+            if (live.me?.active) ready(live.round);
+          }}
         />
+        {(preparing || loadedRound !== live.round) && (
+          <div className="round-preparation" role="status">
+            <h1>{preparing ? 'Get ready' : 'Photo is loading…'}</h1>
+            {preparing ? (
+              <>
+                <strong>
+                  {Math.max(1, Math.ceil((live.startsAt - now - (live.clockOffsetMs || 0)) / 1000))}
+                </strong>
+                <p>Everyone starts together.</p>
+                <p>
+                  {active.filter((p) => p.ready).length} / {active.length} photos loaded
+                </p>
+              </>
+            ) : (
+              <p>The round has started. Your timer continues while the photo loads.</p>
+            )}
+          </div>
+        )}
         <header className="play-heading">
           <button className="play-home" aria-label="Back home" onClick={() => navigate('/')}>
             <ArrowLeft size={19} />
@@ -363,90 +277,114 @@ export default function LiveGame({ id, liveId, navigate, notify }) {
               <Users size={16} />
               {submitted} / {active.length} guessed
             </span>
-            <RoundClock
-              deadline={live.deadline}
-              serverNow={live.serverNow}
-              onExpire={() => refresh()}
-            />
+            {!preparing && (
+              <RoundClock
+                deadline={live.deadline}
+                serverNow={live.serverNow}
+                clockOffsetMs={live.clockOffsetMs}
+                audible={!!canGuess}
+                onExpire={refresh}
+              />
+            )}
           </div>
         </header>
-        {(live.me?.guess || !live.me?.active) && (
-          <div className="live-waiting" role="status">
-            {live.me?.guess
-              ? 'Guess confirmed. Waiting for the group.'
-              : live.isHost
-                ? 'You are watching as host.'
-                : 'You are watching this round.'}
-          </div>
+        {!preparing && (
+          <>
+            {(live.me?.guess || !live.me?.active) && (
+              <div className="live-waiting" role="status">
+                {live.me?.guess
+                  ? 'Guess confirmed. Waiting for the group.'
+                  : 'You are watching as host.'}
+              </div>
+            )}
+            <MapPanel
+              key={live.round}
+              pin={!!(pin || live.me?.guess)}
+              title={canGuess ? 'Choose a location' : 'Waiting for results'}
+            >
+              <Map
+                value={live.me?.guess || pin}
+                onChange={canGuess ? setPin : undefined}
+                className="guess-map"
+              />
+              <div className="guess-controls">
+                {canGuess ? (
+                  <>
+                    <button
+                      className="button full"
+                      disabled={!pin || busy}
+                      onClick={() => action('guess', pin)}
+                      aria-keyshortcuts="Space"
+                    >
+                      <MapPin size={17} />
+                      {pin ? 'Confirm guess' : 'Drop a pin to guess'}
+                      {pin && <kbd>SPACE</kbd>}
+                    </button>
+                    {pin && (
+                      <p className="small-note" role="status">
+                        {saveStatus}
+                        {saveStatus === 'Saved' ? ' · This pin counts at timeout.' : ''}
+                        {saveStatus === 'Couldn’t save' && (
+                          <button onClick={retrySave}>Retry saving</button>
+                        )}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <p>
+                    {submitted} of {active.length} players confirmed.
+                  </p>
+                )}
+                {live.settings.timerMode === 'afterFirstLock' && !live.deadline && (
+                  <p className="small-note">
+                    The {live.settings.afterFirstLockSeconds}-second timer starts when someone
+                    confirms.
+                  </p>
+                )}
+                {live.isHost && (
+                  <details className="live-host-options">
+                    <summary>Host controls</summary>
+                    <button
+                      className="text-button"
+                      disabled={busy}
+                      onClick={() => action('reveal')}
+                    >
+                      Reveal now · saved pins count
+                    </button>
+                    <ul className="lobby-players">
+                      {active
+                        .filter((p) => !p.submitted && p.id !== live.me?.id)
+                        .map((p) => (
+                          <li key={p.id}>
+                            {p.name}
+                            <button
+                              className="text-button"
+                              disabled={busy}
+                              onClick={() => action('remove', { playerId: p.id })}
+                            >
+                              Remove
+                            </button>
+                          </li>
+                        ))}
+                    </ul>
+                  </details>
+                )}
+                {errors}
+              </div>
+            </MapPanel>
+          </>
         )}
-        <MapPanel
-          key={`map-${live.round}`}
-          pin={!!(pin || live.me?.guess)}
-          title={canGuess ? 'Choose a location' : 'Waiting for results'}
-        >
-          <Map
-            value={live.me?.guess || pin}
-            onChange={canGuess ? setPin : undefined}
-            className="guess-map"
-          />
-          <div className="guess-controls">
-            {canGuess ? (
-              <button
-                className="button full"
-                disabled={!pin || busy}
-                onClick={() => action('guess', pin)}
-                aria-keyshortcuts="Space"
-              >
-                <MapPin size={17} />
-                {pin ? 'Confirm guess' : 'Drop a pin to guess'}
-                {pin && <kbd>SPACE</kbd>}
-              </button>
-            ) : (
-              <p className="small-note">
-                {submitted} of {active.length} active players have guessed.
-              </p>
-            )}
-            {live.isHost && (
-              <details className="live-host-options">
-                <summary>Host controls</summary>
-                <button className="text-button" disabled={busy} onClick={() => action('reveal')}>
-                  Reveal now · missing guesses get 0
-                </button>
-                <ul className="lobby-players">
-                  {active
-                    .filter((p) => !p.submitted && p.id !== live.me?.id)
-                    .map((p) => (
-                      <li key={p.id}>
-                        {p.name}
-                        <button
-                          className="text-button"
-                          disabled={busy}
-                          onClick={() => action('remove', { playerId: p.id })}
-                        >
-                          Remove
-                        </button>
-                      </li>
-                    ))}
-                </ul>
-              </details>
-            )}
-            {errors}
-          </div>
-        </MapPanel>
       </main>
     );
   const finished = live.phase === 'finished',
-    totals = [...live.players].sort((a, b) => b.score - a.score),
-    actual = live.results[0]?.actual;
+    actual = live.results[0]?.actual,
+    shown = mapFilter === 'mine' ? live.results.filter((p) => p.id === live.me?.id) : live.results;
   return (
-    <main key={`results-${live.round}`} className="live-page live-results">
+    <main className="live-page live-results">
       <div className="live-title">
         <div>
-          <span className="pill">
-            <Trophy size={16} /> {finished ? 'Final scores' : `Round ${live.round + 1} results`}
-          </span>
           <h1>{live.title}</h1>
-          {live.results[0]?.caption && <p>{live.results[0].caption}</p>}
+          <h2>{finished ? 'Final scores' : `Round ${live.round + 1} results`}</h2>
         </div>
         {live.photoUrl && (
           <a className="result-photo-link" href={live.photoUrl} target="_blank" rel="noreferrer">
@@ -455,68 +393,88 @@ export default function LiveGame({ id, liveId, navigate, notify }) {
           </a>
         )}
       </div>
-      <div className="live-results-grid">
-        {actual && !finished && (
-          <section className="panel live-result-map">
-            <Map actual={actual} guesses={live.results} className="multiplayer-map" />
-            <p className="small-note">
-              <i className="actual-dot" /> Actual location · numbered pins match the table
-            </p>
-          </section>
-        )}
-        <section className="panel live-card">
-          <h2>{finished ? 'Leaderboard' : 'Everyone’s guesses'}</h2>
-          <div className="live-score-scroll">
-            <table className="live-score-table">
-              <thead>
-                <tr>
-                  <th>Player</th>
-                  {!finished && <th>Distance</th>}
-                  <th>{finished ? 'Total' : 'Round'}</th>
-                  {!finished && <th>Total</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {(finished ? totals : live.results).map((p, i) => (
-                  <tr key={p.id}>
-                    <td>
-                      <span
-                        className="player-color"
-                        style={{ background: playerColors[i % playerColors.length] }}
-                      >
-                        {i + 1}
-                      </span>
-                      {p.name}
-                      {p.id === live.me?.id ? ' (you)' : ''}
-                    </td>
-                    {!finished && <td>{formatDistance(p.distance)}</td>}
-                    <td>{p.score.toLocaleString()}</td>
-                    {!finished && <td>{p.total.toLocaleString()}</td>}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {!finished && (
-            <p className="small-note">No guess = 0 points. Guesses are final once confirmed.</p>
+      {!finished && (
+        <div className="live-results-grid">
+          {actual && (
+            <section className="panel live-result-map">
+              {live.me && (
+                <div className="map-filters">
+                  <button
+                    className="button small outline"
+                    aria-pressed={mapFilter === 'all'}
+                    onClick={() => setMapFilter('all')}
+                  >
+                    Everyone
+                  </button>
+                  <button
+                    className="button small outline"
+                    aria-pressed={mapFilter === 'mine'}
+                    onClick={() => setMapFilter('mine')}
+                  >
+                    My guess
+                  </button>
+                </div>
+              )}
+              <Map actual={actual} guesses={shown} meId={live.me?.id} className="multiplayer-map" />
+              <p className="small-note">
+                Actual location · Your pin is labeled “You”. Player numbers stay the same each
+                round.
+              </p>
+            </section>
           )}
-        </section>
-      </div>
+          <section className="panel live-card">
+            <h2>This round</h2>
+            <div className="score-scroll">
+              <table className="scores-table">
+                <thead>
+                  <tr>
+                    <th>Player</th>
+                    <th>Distance</th>
+                    <th>Points</th>
+                    <th>Guessing time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {live.results.map((p) => (
+                    <tr key={p.id} className={p.id === live.me?.id ? 'my-score' : ''}>
+                      <th>
+                        <span
+                          className="player-color"
+                          style={{ background: playerColors[(p.marker - 1) % playerColors.length] }}
+                        >
+                          {p.marker}
+                        </span>
+                        {p.name}
+                        {p.id === live.me?.id ? ' (You)' : ''}
+                      </th>
+                      <td>{formatDistance(p.distance)}</td>
+                      <td>{p.score.toLocaleString()}</td>
+                      <td>{duration(p.durationMs)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      )}
+      <section className="panel results-section">
+        <h2>Overall standings</h2>
+        <Standings rows={live.standings || []} meId={live.me?.id} />
+      </section>
+      <ScoreMatrix rows={live.standings || []} rounds={live.rounds} live meId={live.me?.id} />
       <div className="live-next">
         {finished ? (
           <button className="button" onClick={() => navigate('/')}>
             Back to my trips
           </button>
-        ) : live.isHost ? (
+        ) : live.canAdvance ? (
           <button className="button" disabled={busy} onClick={() => action('next')}>
             {live.round + 1 === live.rounds ? 'Show final scores' : 'Start next round'}{' '}
             <ArrowRight size={18} />
           </button>
         ) : (
-          <p role="status">
-            Waiting for the host to{' '}
-            {live.round + 1 === live.rounds ? 'show final scores' : 'start the next round'}.
-          </p>
+          <p role="status">Waiting for the host to start the next round.</p>
         )}
         {!finished && live.isHost && (
           <button className="text-button" disabled={busy} onClick={() => action('end')}>
@@ -524,6 +482,14 @@ export default function LiveGame({ id, liveId, navigate, notify }) {
           </button>
         )}
       </div>
+      {finished && live.me?.active && (
+        <RoundCards
+          id={id}
+          results={live.me.results || []}
+          photoUrl={(round) => `/api/games/${id}/live/${liveId}/photos/${round}`}
+        />
+      )}
+      {finished && live.me?.active && <ShareActions id={id} source={liveId} notify={notify} />}{' '}
       {errors}
     </main>
   );

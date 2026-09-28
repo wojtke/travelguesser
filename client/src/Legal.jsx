@@ -116,10 +116,22 @@ export default function Legal({ page }) {
             the public Photon service at photon.komoot.io. We do not send it your account details,
             cookies or photos. These external services have their own operational logging.
           </p>
+          <h2>Saved guesses and shared results</h2>
+          <p>
+            During a live round we save your current map pin so it can count if time runs out.
+            Unconfirmed pins are private to your browser identity until the round is revealed. Round
+            results include nicknames, points, distances and guessing time. Choosing “Share my
+            results” creates a separate link containing your nickname, trip title, scores, distances
+            and timing, without photos, coordinates, captions or other players’ results. Anyone with
+            that link can view it. Pausing or deleting the trip blocks it.
+          </p>
           <h2>How long data stays</h2>
           <p>
             Trips, uploaded photos, solo scores and stored lobby state remain until the creator
-            deletes the trip or we remove it following a valid request or abuse report. A live link
+            deletes the trip or we remove it following a valid request or abuse report. Saved live
+            pins expire with the 24-hour lobby. Shared result snapshots expire after 30 days,
+            including if the host has since opened a new lobby. Expired pins and snapshots are
+            queued for automatic database deletion, normally within another 24 hours. A live link
             expires 24 hours after creation; expiry blocks access, but is not automatic data
             deletion. Opening a new lobby replaces the previous lobby’s state. Creator account
             records remain until account deletion is requested. Demo progress and demo scores expire
@@ -255,6 +267,8 @@ export default function Legal({ page }) {
             </tbody>
           </table>
           <p>
+            The tg_countdown_sound local-storage preference remembers whether you muted the
+            final-five-second ticks, until you clear browser storage. It is not sent to our server.
             We do not persist optional name preferences in local storage. Older tg_player_name and
             tg_host_name entries are removed when this version loads. Your nickname remains part of
             the server-side game record. Google sign-in uses temporary Firebase state in memory and

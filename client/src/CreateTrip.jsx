@@ -31,6 +31,15 @@ export default function CreateTrip({ user, navigate, notify, signIn }) {
     [drag, setDrag] = useState(false);
   const [usage, setUsage] = useState(null),
     [settings, setSettings] = useState(defaultSettings);
+  const [autoTitle, setAutoTitle] = useState(true),
+    [attempted, setAttempted] = useState(false),
+    [validation, setValidation] = useState([]);
+  useEffect(() => {
+    if (autoTitle && usage) {
+      const first = (user?.name || '').trim().split(/\s+/)[0];
+      setTitle(`${first ? first + '’s' : 'Your'} trip #${usage.nextTripNumber || usage.trips + 1}`);
+    }
+  }, [usage, autoTitle, user?.name]);
   useEffect(() => {
     api('/host/usage')
       .then(setUsage)
@@ -71,6 +80,48 @@ export default function CreateTrip({ user, navigate, notify, signIn }) {
   }
   async function publish(e) {
     e.preventDefault();
+    const problems = [];
+    const missingIndex = photos.findIndex((p) => !p.location);
+    if (!photos.length) problems.push('Add at least one photo.');
+    if (missingIndex >= 0) problems.push('Set locations for the highlighted photos.');
+    if (!title.trim()) problems.push('Enter a trip name.');
+    if (!hostName.trim()) problems.push('Enter your display name.');
+    const seconds =
+      settings.timerMode === 'afterFirstLock'
+        ? settings.afterFirstLockSeconds
+        : settings.timeLimitSeconds;
+    if (
+      settings.timerMode !== 'none' &&
+      (!Number.isInteger(seconds) || seconds < 1 || seconds > 3600)
+    )
+      problems.push('Choose a whole number of seconds from 1 to 3600.');
+    setAttempted(true);
+    setValidation(problems);
+    if (problems.length) {
+      if (missingIndex >= 0) setSelected(missingIndex);
+      setTimeout(() => {
+        const el = !photos.length
+          ? document.querySelector('.dropzone')
+          : missingIndex >= 0
+            ? document.querySelector('.location-editor')
+            : !title.trim()
+              ? document.getElementById('title')
+              : !hostName.trim()
+                ? document.getElementById('name')
+                : document.querySelector('#game-options input[type=number]');
+        if (el) {
+          el.scrollIntoView({
+            behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth',
+            block: 'center',
+          });
+          el.focus();
+          el.classList.remove('validation-pulse');
+          void el.offsetWidth;
+          el.classList.add('validation-pulse');
+        }
+      }, 0);
+      return;
+    }
     setBusy(true);
     setError('');
     const form = new FormData();
@@ -78,6 +129,7 @@ export default function CreateTrip({ user, navigate, notify, signIn }) {
       'metadata',
       JSON.stringify({
         title,
+        autoTitle,
         hostName,
         settings,
         photos: photos.map((p) => ({ ...p.location, caption: p.caption })),
@@ -95,6 +147,25 @@ export default function CreateTrip({ user, navigate, notify, signIn }) {
       setBusy(false);
     }
   }
+  useEffect(() => {
+    if (!attempted) return;
+    const seconds =
+      settings.timerMode === 'afterFirstLock'
+        ? settings.afterFirstLockSeconds
+        : settings.timeLimitSeconds;
+    setValidation((messages) =>
+      messages.filter((message) => {
+        if (message.startsWith('Add at least')) return !photos.length;
+        if (message.startsWith('Set locations')) return photos.some((p) => !p.location);
+        if (message === 'Enter a trip name.') return !title.trim();
+        if (message === 'Enter your display name.') return !hostName.trim();
+        return (
+          settings.timerMode !== 'none' &&
+          (!Number.isInteger(seconds) || seconds < 1 || seconds > 3600)
+        );
+      }),
+    );
+  }, [photos, title, hostName, settings, attempted]);
   const missing = photos.filter((p) => !p.location).length;
   if (created)
     return (
@@ -156,36 +227,20 @@ export default function CreateTrip({ user, navigate, notify, signIn }) {
             : ' Friends can play without an account.'}
         </p>
       )}
-      <form onSubmit={publish}>
-        <div className="trip-details panel">
-          <div className="section-number">01</div>
-          <div className="field">
-            <label htmlFor="title">Trip name</label>
-            <input
-              id="title"
-              placeholder="e.g. Japan 2026"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              required
-              maxLength={80}
-            />
+      <form onSubmit={publish} noValidate>
+        {validation.length > 0 && (
+          <div className="error validation-summary" role="alert">
+            <strong>Finish these details to create your trip:</strong>
+            <ul>
+              {validation.map((v) => (
+                <li key={v}>{v}</li>
+              ))}
+            </ul>
           </div>
-          <div className="field host-name">
-            <label htmlFor="name">Your name</label>
-            <input
-              id="name"
-              placeholder="Your display name"
-              value={hostName}
-              onChange={(e) => setHostName(e.target.value)}
-              required
-              maxLength={30}
-            />
-          </div>
-        </div>
-        <GameSettings value={settings} onChange={setSettings} />
+        )}
         <div className="upload-heading">
           <div>
-            <span className="section-number">02</span>
+            <span className="section-number">01</span>
             <h2>Upload photos</h2>
           </div>
           <span>{photos.length} / 12 photos</span>
@@ -239,7 +294,7 @@ export default function CreateTrip({ user, navigate, notify, signIn }) {
                 <button
                   type="button"
                   key={p.id}
-                  className={`photo-thumb ${selected === i ? 'selected' : ''}`}
+                  className={`photo-thumb ${selected === i ? 'selected' : ''} ${attempted && !p.location ? 'needs-location' : ''}`}
                   onClick={() => setSelected(i)}
                   aria-label={`Edit photo ${i + 1}${p.location ? ', location set' : ', needs a location'}`}
                 >
@@ -282,7 +337,31 @@ export default function CreateTrip({ user, navigate, notify, signIn }) {
                     PHOTO {String(selected + 1).padStart(2, '0')}
                   </span>
                 </div>
-                <div className="location-editor">
+                <div
+                  className={`location-editor ${attempted && !current.location ? 'field-error' : ''}`}
+                  tabIndex={-1}
+                >
+                  <div className="photo-navigation">
+                    <button
+                      type="button"
+                      className="button outline small"
+                      disabled={selected === 0}
+                      onClick={() => setSelected((i) => i - 1)}
+                    >
+                      ← Previous
+                    </button>
+                    <span>
+                      Photo {selected + 1} of {photos.length}
+                    </span>
+                    <button
+                      type="button"
+                      className="button outline small"
+                      disabled={selected === photos.length - 1}
+                      onClick={() => setSelected((i) => i + 1)}
+                    >
+                      Next →
+                    </button>
+                  </div>
                   <div className="location-title">
                     <div>
                       <h3>
@@ -345,6 +424,37 @@ export default function CreateTrip({ user, navigate, notify, signIn }) {
             )}
           </div>
         )}
+        <div className="trip-details panel">
+          <div className="section-number">02</div>
+          <div className="field">
+            <label htmlFor="title">Trip name</label>
+            <input
+              id="title"
+              placeholder="e.g. Japan 2026"
+              value={title}
+              onChange={(e) => {
+                setAutoTitle(false);
+                setTitle(e.target.value);
+              }}
+              aria-invalid={attempted && !title.trim()}
+              required
+              maxLength={80}
+            />
+          </div>
+          <div className="field host-name">
+            <label htmlFor="name">Your name</label>
+            <input
+              id="name"
+              placeholder="Your display name"
+              value={hostName}
+              onChange={(e) => setHostName(e.target.value)}
+              aria-invalid={attempted && !hostName.trim()}
+              required
+              maxLength={30}
+            />
+          </div>
+        </div>
+        <GameSettings value={settings} onChange={setSettings} />
         <p className="privacy-note">
           Trips are link-only, with no public directory. Anyone with the link can play and forward
           it. You can pause sharing or delete the trip from My trips. Upload only photos you have
@@ -374,16 +484,7 @@ export default function CreateTrip({ user, navigate, notify, signIn }) {
           </div>
           <button
             className="button"
-            disabled={
-              busy ||
-              preparing ||
-              !photos.length ||
-              !!missing ||
-              !title.trim() ||
-              !hostName.trim() ||
-              !usage ||
-              usage.trips >= usage.limits.activeTrips
-            }
+            disabled={busy || preparing || !usage || usage.trips >= usage.limits.activeTrips}
           >
             {busy ? (
               <>

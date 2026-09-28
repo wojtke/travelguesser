@@ -17,6 +17,7 @@ const store = new CloudStore({
 after(async () => {
   for (const collection of ['games', 'creators'])
     await db.recursiveDelete(db.collection(collection));
+  await new Promise((resolve) => setTimeout(resolve, 250));
   await db.terminate();
 });
 const fixture = (id, ownerUid = 'owner') => ({
@@ -75,7 +76,7 @@ test('Firestore live updates preserve concurrent players and guesses', async () 
     ),
   );
   await store.mutateGame(game.id, (g) =>
-    updateLive(g, id, { uid: game.ownerUid }, 'start', { round: 0 }),
+    updateLive(g, id, { uid: game.ownerUid }, 'start', { round: 0 }, Date.now() - 5100),
   );
   await Promise.all(
     ['a', 'b'].map((playerId) =>
@@ -115,4 +116,74 @@ test('Firestore hides expired demos before TTL deletion and expires both progres
   const score = (await store.gameRef(game.id).collection('leaderboard').doc('old').get()).data();
   assert.equal(score.demoExpiresAt.toMillis(), run.demoExpiresAt.getTime());
   assert.equal((await store.leaderboard(game.id))[0].name, 'Fresh');
+});
+
+test('Firestore draft versions serialize with timeout, sharing is idempotent, and separate instances receive updates', async () => {
+  const { createLiveStreams } = await import('../../server/live-streams.js');
+  const { EventEmitter } = await import('node:events');
+  const { expireLive } = await import('../../server/live.js');
+  const secondStore = new CloudStore({ db, bucket: {} });
+  let game = await publish({
+    ...fixture('v2-firestore-trip', 'v2-owner'),
+    settings: { mode: 'live', timeLimitSeconds: 60 },
+  });
+  game = await store.mutateGame(game.id, (g) => newLive(g));
+  const id = game.live.id,
+    actor = { playerId: 'a' };
+  await store.mutateLive(game.id, id, (g, d) =>
+    updateLive(g, id, actor, 'join', { name: 'A' }, Date.now(), d),
+  );
+  game = await store.mutateLive(game.id, id, (g, d) =>
+    updateLive(g, id, { uid: 'v2-owner' }, 'start', { round: 0 }, Date.now() - 5100, d),
+  );
+  class Res extends EventEmitter {
+    states = [];
+    status() {
+      return this;
+    }
+    set() {
+      return this;
+    }
+    flushHeaders() {}
+    write(s) {
+      if (s.startsWith('id:')) this.states.push(JSON.parse(s.split('data: ')[1]));
+      return true;
+    }
+    end() {
+      this.ended = true;
+    }
+  }
+  const responses = [new Res(), new Res()];
+  await Promise.all(
+    [store, secondStore].map((s, i) =>
+      createLiveStreams(s)({ game, params: { liveId: id }, playerId: 'a' }, responses[i]),
+    ),
+  );
+  try {
+    await Promise.all(
+      [1, 3, 2].map((version) =>
+        store.saveLiveDraft(game.id, id, actor, { round: 0, version, lat: 0, lng: 0 }),
+      ),
+    );
+    assert.equal((await secondStore.getLiveDraft(game.id, id, 'a')).version, 3);
+    await store.mutateLive(game.id, id, (g, d) => expireLive(g, g.live.deadline, d));
+    const until = Date.now() + 5000;
+    while (!responses.every((r) => r.states.at(-1)?.phase === 'results') && Date.now() < until)
+      await new Promise((r) => setTimeout(r, 20));
+    assert.ok(responses.every((r) => r.states.at(-1)?.results[0].score === 5000));
+    await store.mutateLive(game.id, id, (g, d) =>
+      updateLive(g, id, { uid: 'v2-owner' }, 'next', { round: 0 }, Date.now(), d),
+    );
+    const shares = await Promise.all(
+      [store, secondStore].map((s) => s.createSharedResult(game.id, actor, id)),
+    );
+    assert.equal(shares[0].token, shares[1].token);
+    await store.mutateGame(game.id, (g) => newLive(g));
+    assert.ok(await store.getSharedResult(game.id, shares[0].token));
+    await store.deleteGame(game.id, 'v2-owner');
+    assert.equal(await store.getSharedResult(game.id, shares[0].token), null);
+    assert.equal(await store.getLiveDraft(game.id, id, 'a'), null);
+  } finally {
+    for (const res of responses) res.emit('close');
+  }
 });

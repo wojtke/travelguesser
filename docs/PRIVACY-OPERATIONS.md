@@ -54,3 +54,9 @@ Do not enable analytics, optional tracking, public galleries or globally cached 
 - Demo progress and leaderboard scores expire after 30 days, with immediate API filtering and managed Firestore TTL cleanup of both collections. Physical deletion normally follows within 24 hours. This does not expire user-uploaded trips.
 - Removing a live participant revokes their current/future photo and group-result access in that session. It cannot retract photos already received, and anonymous link access is not a permanent identity ban.
 - Abuse protection uses short-lived in-memory counters and salted network hashes; no persistent IP-based analytics or visitor identifier is added.
+
+## Gameplay update retention
+
+`games/{trip}/liveDrafts` stores one versioned private pin per lobby/player, expiring with the lobby (24h). `games/{trip}/sharedResults` stores opt-in, spoiler-free snapshots with a 30-day `expiresAt`; links are idempotent while valid and do not renew retention. No snapshots are created automatically. Pause/delete blocks snapshots, including old-lobby snapshots; recursive trip deletion removes both collections. TTL runs asynchronously and application access checks expiry immediately. New code does not change the retention of ordinary trips/results.
+
+Enable `expiresAt` TTL on collection groups `liveDrafts` and `sharedResults` using scripts/deploy.sh. Run `PROJECT_ID=... node scripts/migrate-gameplay.mjs` for count-only dry-run, then add `--apply`. It transactionally seeds creator sequence counters and adds public IDs/per-photo score summaries from completed solo runs; it never invents old durations or decreases a sequence. Repeat runs skip already migrated records. Deploy the new runtime before applying to prevent old writers dropping new fields. Existing live protocols remain unchanged.
