@@ -33,6 +33,10 @@ gcloud firestore databases describe --database='(default)' --project="$PROJECT_I
 for FIELD in live photos; do
   gcloud firestore indexes fields update "$FIELD" --collection-group=games --disable-indexes --project="$PROJECT_ID" --quiet
 done
+# Only demo documents carry this TTL field; uploaded trips do not expire.
+for COLLECTION in runs leaderboard; do
+  gcloud firestore fields ttls update demoExpiresAt --collection-group="$COLLECTION" --enable-ttl --async --project="$PROJECT_ID" --quiet
+done
 gcloud storage buckets describe "gs://${BUCKET}" --project="$PROJECT_ID" >/dev/null 2>&1 ||
   gcloud storage buckets create "gs://${BUCKET}" --location="$REGION" --uniform-bucket-level-access --public-access-prevention --project="$PROJECT_ID" --quiet
 

@@ -36,6 +36,12 @@ Open <http://localhost:8080>, click **Create a trip**, then **Continue locally**
 
 ```sh
 npm test
+npm run format:check
+npm run build
+npx playwright install chromium
+npm run test:browser
+# Requires Java 21; uses an isolated demo project, never production.
+npm exec --yes --package=firebase-tools@15.31.0 -- firebase emulators:exec --only firestore --project demo-tripguessr-review 'npm run test:firestore'
 ```
 
 The integration tests cover Google identity validation, CSRF protection, session expiry, owner isolation, concurrent upload quotas, interrupted upload cleanup, answer hiding, metadata stripping, scoring, persistence, the demo, live-round synchronization, simultaneous/duplicate guesses, server-side timers, host authorization, photo progression and paused sharing.
@@ -97,7 +103,7 @@ The Worker also forwards `/__/auth/*` and `/__/firebase/init.json` to the existi
 - Creators sign in with Google; Firebase Authentication stores their identity and last sign-in metadata. The app uses a five-day Secure, HttpOnly session cookie and does not store passwords or Google access tokens.
 - Firestore stores trips, an owner UID and quota slots for each creator, anonymous player runs/leaderboards, and one bounded live-session state per trip. It does not duplicate email addresses or build a separate login-history database. Cloud Run is the only application client allowed to access it.
 - Each creator can keep **5 active trips**, with **12 photos per trip** and at most **2 MiB per stored photo** (up to 120 MiB of current photos per creator). Upload slots are reserved transactionally before image processing; failed uploads are removed, and interrupted uploads/deletes are retried when the creator returns. Deleting a trip frees its slot after its photos are removed.
-- Limits and request throttling reduce casual abuse; they are not a hard spending cap or a guarantee against many-account abuse. There is no automatic expiry of published trips. Cloud Storage soft-deleted objects may remain billable during the bucket’s retention period.
+- Limits and request throttling reduce casual abuse; they are not a hard spending cap or a guarantee against many-account abuse. Published user trips do not expire automatically. Demo progress and scores expire after 30 days and are cleaned up with Firestore TTL. Cloud Storage soft-deleted objects may remain billable during the bucket’s retention period.
 - There is no public trip directory. Anyone with a trip link can join; Google login is needed only for creating and managing trips.
 
 For an existing installation, sign in once with the approved owner’s Google account, then migrate old trips. Dry-run first; `--apply` writes a private backup and preserves invite links, photos, and player results:
@@ -120,7 +126,7 @@ Legacy host keys no longer grant access. The deployment removes the old `HOST_KE
 - Scores use `round(5000 × exp(-distanceKm / 1500))`; 5,000 points for an exact guess. Distance uses the haversine formula.
 - A secure, HttpOnly browser cookie identifies each friend. Closing/reopening the page resumes the game. Clearing cookies or changing devices starts a new entry. This is a friendly game, not a cheat-proof competition.
 - There is no public trip directory. Anyone with a trip link can play and see its photos; share links only with intended friends. Hosts can pause link access or delete trips and their leaderboards.
-- No Google Maps key, email delivery setup, or player accounts are required. OpenStreetMap tiles require internet access. In-memory request limits apply per server instance.
+- No Google Maps key, email delivery setup, or player accounts are required. OpenStreetMap tiles require internet access. In-memory request limits apply per server instance: 900 API requests/minute per network and 3,000 total/minute before authentication/database access, plus 500 ordinary requests/15 minutes or 45 live requests/minute per player. Network keys are transient salted hashes, never saved to the database or logs. These are abuse controls, not a hard spending cap.
 
 ## Reference and asset credits
 
@@ -131,3 +137,18 @@ Legacy host keys no longer grant access. The deployment removes the old `HOST_KE
 - [Photon place search](https://github.com/komoot/photon), backed by OpenStreetMap data. Search text is sent to the configured Photon service; images and host credentials are not sent to it.
 - Landing and demo photography: [Unsplash](https://unsplash.com/license). Image IDs: `photo-1464822759023-fed622ff2c3b`, `photo-1502602898657-3e91760cbb34`, `photo-1506973035872-a4ec16b8e8d9`, `photo-1501594907352-04cda38ebc29`.
 - DM Sans and Lora fonts from Google Fonts, served locally. Both are licensed under the SIL Open Font License; licenses are included in `public/fonts/`.
+
+## Demo retention
+
+Only demo runs and leaderboard documents have a `demoExpiresAt` timestamp. Production TTL policies on both collection groups remove them after 30 days (physical deletion normally lags expiry by up to 24 hours). API reads hide expired records immediately. Demo leaderboard reads scan at most 100 candidates while TTL catches up, so the displayed list can temporarily contain fewer than 20 entries. User-created trips and their scores have no TTL field.
+
+For existing installations, deploy the new app, enable both TTL policies, then backfill the demo-only timestamps. The backfill prints counts only and supports a read-only preview:
+
+```sh
+gcloud firestore fields ttls update demoExpiresAt --collection-group=runs --enable-ttl --project=YOUR_PROJECT_ID
+gcloud firestore fields ttls update demoExpiresAt --collection-group=leaderboard --enable-ttl --project=YOUR_PROJECT_ID
+PROJECT_ID=YOUR_PROJECT_ID node scripts/configure-demo-retention.mjs
+PROJECT_ID=YOUR_PROJECT_ID node scripts/configure-demo-retention.mjs --apply
+```
+
+TTL deletions are billable Firestore operations. No scheduler, background server or new database is added. Local development filters expired demo records on reads and physically prunes them on the next successful store write. The emulator tests verify expiry behavior and timestamp persistence; the emulator does not test Google's managed TTL deletion service.

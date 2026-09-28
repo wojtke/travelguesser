@@ -77,3 +77,5 @@ Approach 70k Worker requests/day: investigate idle tabs/bots and decide whether 
 ## Monitoring update — 28 September 2026
 
 The [observability setup](OBSERVABILITY.md) adds a private dashboard, one bounded activity counter and a three-location uptime check every five minutes (about 25,920 executions/month and 864 origin/Worker requests/day). Native metrics, current uptime checks and this small counter are expected to fit the applicable free allowances at current traffic. Account-wide allowances and origin processing still matter. Private operator email alerts are enabled; Google currently lists alerting charges as starting no sooner than 1 September 2027. No paid monitoring subscription or hard spending cap was added.
+
+Demo runs and leaderboard records now expire after 30 days. Firestore TTL deletions are billed as document deletions; they are not a free-tier guarantee. This uses the existing database and no scheduled service. See [Firestore TTL behavior and pricing](https://docs.cloud.google.com/firestore/native/docs/ttl). Early per-network and per-instance API throttles limit database work but remain per-process controls, not a hard billing cap.

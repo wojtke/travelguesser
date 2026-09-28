@@ -48,3 +48,9 @@ Review the applicable [Google Cloud data processing terms](https://cloud.google.
 Have a process for content complaints and security incidents. Assess breach notification duties promptly with the appropriate authority/adviser; do not wait for routine maintenance. Restrict cloud/GitHub administration, maintain account recovery and review access regularly. If the service becomes commercial, targets children, adds tracking or processes sensitive content, obtain a focused legal review and revise the product/notices before that change. The current terms set an intended audience of 16+; this is not an age-verification system.
 
 Do not enable analytics, optional tracking, public galleries or globally cached private photos without revisiting privacy choices. Search-engine exclusion is best effort; use authenticated invitations if future trips require stronger access control.
+
+## Review fixes — 28 September 2026
+
+- Demo progress and leaderboard scores expire after 30 days, with immediate API filtering and managed Firestore TTL cleanup of both collections. Physical deletion normally follows within 24 hours. This does not expire user-uploaded trips.
+- Removing a live participant revokes their current/future photo and group-result access in that session. It cannot retract photos already received, and anonymous link access is not a permanent identity ban.
+- Abuse protection uses short-lived in-memory counters and salted network hashes; no persistent IP-based analytics or visitor identifier is added.

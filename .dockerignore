@@ -8,3 +8,8 @@ test-results
 firebase-debug*.log
 test
 cloudflare
+
+firestore-debug.log
+ui-debug.log
+playwright-report/
+tests/

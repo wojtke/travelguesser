@@ -10,7 +10,11 @@
     "dev": "concurrently -k \"node --watch server/index.js\" \"vite --host 0.0.0.0\"",
     "build": "vite build",
     "start": "node server/index.js",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "format": "prettier --write \"server/**/*.js\" \"client/src/**/*.{js,jsx,css}\" \"test/**/*.js\" \"tests/**/*.js\" playwright.config.js",
+    "format:check": "prettier --check \"server/**/*.js\" \"client/src/**/*.{js,jsx,css}\" \"test/**/*.js\" \"tests/**/*.js\" playwright.config.js",
+    "test:browser": "playwright test",
+    "test:firestore": "node --test test/firestore/*.test.js"
   },
   "dependencies": {
     "@google-cloud/firestore": "^9.2.0",
@@ -30,9 +34,11 @@
     "sharp": "^0.35.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@vitejs/plugin-react": "^6.0.0",
     "concurrently": "^9.2.1",
     "google-auth-library": "^9.15.1",
+    "prettier": "^3.9.9",
     "supertest": "^7.2.2",
     "vite": "^8.0.0"
   },

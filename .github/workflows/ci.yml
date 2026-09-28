@@ -12,5 +12,13 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - run: npm run format:check
       - run: npm test
       - run: npm run build
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm exec --yes --package=firebase-tools@15.31.0 -- firebase emulators:exec --only firestore --project demo-tripguessr-review 'npm run test:firestore'
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser

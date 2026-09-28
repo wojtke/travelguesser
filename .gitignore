@@ -8,3 +8,7 @@ dist/
 test-results/
 firebase-debug*.log
 .wrangler/
+
+firestore-debug.log
+ui-debug.log
+playwright-report/
