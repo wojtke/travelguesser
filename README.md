@@ -74,7 +74,11 @@ New IAM permissions can take a few minutes to propagate. If the first source bui
 
 `node scripts/smoke.mjs` verifies public access, the anonymous demo, scoring, and protected creator endpoints. `node scripts/smoke.mjs http://localhost:8080 --create` also creates and removes a temporary trip, testing uploads and two-player results. For that extended check against Google-auth deployments, supply a fresh Google Firebase ID token through `SMOKE_ID_TOKEN_FILE`; never commit tokens.
 
-For an app-only redeploy after the initial setup:
+App updates deploy automatically through [GitHub Actions](https://github.com/wojtke/travelguesser/actions/workflows/ci.yml): pushes to `main` must pass formatting, server, Firestore emulator, build and browser checks before production deployment. Pull requests and other branches only run checks. The workflow also supports **Run workflow → main** for an explicit redeploy, with the same checks.
+
+The deployment builds the existing Dockerfile on the GitHub runner, pushes an immutable image to the existing Artifact Registry repository and updates Cloud Run. Short-lived credentials come from Workload Identity Federation; there is no stored Google service-account key. Deployments are serialized, superseded commits are skipped, and origin/public health, homepage and JavaScript checks run after promotion. Failed verification restores the previous traffic allocation when this pipeline still owns the active revision. See [deployment operations](docs/DEPLOYMENT.md) for setup, permissions and rollback.
+
+For an emergency manual app-only redeploy after the initial setup:
 
 ```sh
 gcloud run deploy travelguesser --source=. \
