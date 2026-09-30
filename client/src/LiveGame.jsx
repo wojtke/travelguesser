@@ -6,6 +6,7 @@ import { formatDistance } from './api';
 import Map, { playerColors } from './Map';
 import PhotoViewer from './PhotoViewer';
 import MapPanel from './MapPanel';
+import CoordinateFields from './CoordinateFields';
 import RoundClock, { enableCountdownAudio } from './RoundClock';
 import { Standings, ScoreMatrix, ShareActions, RoundCards, duration } from './ResultsPanels';
 export default function LiveGame({ id, liveId, navigate, notify, publicTrip = false }) {
@@ -104,6 +105,12 @@ export default function LiveGame({ id, liveId, navigate, notify, publicTrip = fa
           Join lobby
         </button>
       </div>
+      {publicTrip && (
+        <p className="small-note">
+          Joining uses your first attempt for this trip and changes any ranked attempt in progress
+          to practice.
+        </p>
+      )}
     </form>
   );
   const errors = error && (
@@ -137,8 +144,8 @@ export default function LiveGame({ id, liveId, navigate, notify, publicTrip = fa
   if (live.phase === 'lobby')
     return (
       <main className="live-page">
-        <button className="back-link" onClick={() => navigate('/')}>
-          <ArrowLeft size={16} /> My trips
+        <button className="back-link" onClick={() => navigate(publicTrip ? `/p/${id}` : '/')}>
+          <ArrowLeft size={16} /> {publicTrip ? 'Back to trip' : 'My trips'}
         </button>
         <div className="live-title">
           <div>
@@ -204,7 +211,7 @@ export default function LiveGame({ id, liveId, navigate, notify, publicTrip = fa
                   Host and play
                 </label>
                 <p className="small-note">
-                  You do not need to play. As the creator, you already know the locations.
+                  You can watch and control the game, or join as a player.
                 </p>
                 <button
                   className="button full"
@@ -212,6 +219,16 @@ export default function LiveGame({ id, liveId, navigate, notify, publicTrip = fa
                   onClick={() => action('start')}
                 >
                   Start first round <ArrowRight size={18} />
+                </button>
+                <button
+                  className="text-button"
+                  disabled={busy}
+                  onClick={async () => {
+                    const closed = await action('end');
+                    if (closed?.phase === 'finished') navigate(publicTrip ? `/p/${id}` : '/');
+                  }}
+                >
+                  Close lobby
                 </button>
               </>
             ) : (
@@ -311,6 +328,7 @@ export default function LiveGame({ id, liveId, navigate, notify, publicTrip = fa
               <div className="guess-controls">
                 {canGuess ? (
                   <>
+                    <CoordinateFields value={pin} onChange={setPin} />
                     <button
                       className="button full"
                       disabled={!pin || busy}
@@ -351,6 +369,9 @@ export default function LiveGame({ id, liveId, navigate, notify, publicTrip = fa
                       onClick={() => action('reveal')}
                     >
                       Reveal now · saved pins count
+                    </button>
+                    <button className="text-button" disabled={busy} onClick={() => action('end')}>
+                      End session
                     </button>
                     <ul className="lobby-players">
                       {active
@@ -466,8 +487,8 @@ export default function LiveGame({ id, liveId, navigate, notify, publicTrip = fa
       <ScoreMatrix rows={live.standings || []} rounds={live.rounds} live meId={live.me?.id} />
       <div className="live-next">
         {finished ? (
-          <button className="button" onClick={() => navigate('/')}>
-            Back to my trips
+          <button className="button" onClick={() => navigate(publicTrip ? `/p/${id}` : '/')}>
+            {publicTrip ? 'Back to trip' : 'Back to my trips'}
           </button>
         ) : live.canAdvance ? (
           <button className="button" disabled={busy} onClick={() => action('next')}>

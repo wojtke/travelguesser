@@ -243,3 +243,53 @@ test('public ranked transactions serialize across instances and source deletion 
     stop();
   }
 });
+
+test('public live exposure serializes with ranked progress across instances', async () => {
+  const { createPublicService } = await import('../../server/public-service.js');
+  const source = await publish({
+    ...fixture('rank-exposure-source', 'exposure-owner'),
+    photos: [
+      { key: '0.jpg', lat: 0, lng: 0 },
+      { key: '1.jpg', lat: 0, lng: 0 },
+    ],
+  });
+  const one = createPublicService(store),
+    two = createPublicService(new CloudStore({ db, bucket: {} }));
+  const p = await one.publish(source.id, source.ownerUid, {
+    title: 'Exposure fixture',
+    nickname: 'Author',
+    rightsConfirmed: true,
+    visibilityConfirmed: true,
+  });
+  for (const mode of ['host', 'join']) {
+    const actor = { uid: `exposure-${mode}`, playerId: `exposure-browser-${mode}` };
+    await one.join(p.id, actor, { name: 'Ranked', ranked: true, consent: true });
+    let expose;
+    if (mode === 'host') expose = () => two.createRoom(p.id, actor, {});
+    else {
+      const g = await two.createRoom(
+        p.id,
+        { uid: 'exposure-room-host', playerId: 'host-browser' },
+        {},
+      );
+      expose = () =>
+        two.mutateRoom(
+          p.id,
+          g.live.id,
+          (game) => updateLive(game, g.live.id, actor, 'join', { name: 'Player' }),
+          actor,
+          'join',
+        );
+    }
+    await Promise.all([
+      one.updateRun(p.id, actor, 'guess', { round: 0, lat: 0, lng: 0 }),
+      expose(),
+    ]);
+    await two.updateRun(p.id, actor, 'round', { round: 1 });
+    const results = await Promise.all(
+      [one, two].map((s) => s.updateRun(p.id, actor, 'guess', { round: 1, lat: 0, lng: 0 })),
+    );
+    assert.ok(results.every(({ run }) => run.completed && !run.ranked && run.score === 10000));
+    assert.equal((await one.board(p.id)).length, 0);
+  }
+});

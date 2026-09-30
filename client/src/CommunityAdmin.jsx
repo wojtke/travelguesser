@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, json } from './api';
 import PhotoCredit from './PhotoCredit';
+import useRequestGuard from './useRequestGuard';
 export default function CommunityAdmin({ navigate }) {
   const [tab, setTab] = useState('reports'),
     [rows, setRows] = useState([]),
@@ -12,32 +13,58 @@ export default function CommunityAdmin({ navigate }) {
     [message, setMessage] = useState(''),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
+    [loading, setLoading] = useState(false),
+    [scoresLoading, setScoresLoading] = useState(false),
     [reviewed, setReviewed] = useState(false),
     [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const beginList = useRequestGuard(tab),
+    beginScores = useRequestGuard(`${tab}:${selected?.id || ''}`),
+    beginLookup = useRequestGuard(`${tab}:${selected?.id || ''}`);
   async function load(next) {
-    const d = await api(`/admin/${tab}${next ? `?cursor=${encodeURIComponent(next)}` : ''}`);
-    setRows((old) => (next ? [...old, ...d.items] : d.items));
-    setCursor(d.cursor);
+    const isCurrent = beginList();
+    setLoading(true);
+    try {
+      const d = await api(`/admin/${tab}${next ? `?cursor=${encodeURIComponent(next)}` : ''}`);
+      if (!isCurrent()) return;
+      setRows((old) => (next ? [...old, ...d.items] : d.items));
+      setCursor(d.cursor);
+    } catch (e) {
+      if (isCurrent()) setError(e.message);
+    } finally {
+      if (isCurrent()) setLoading(false);
+    }
   }
   useEffect(() => {
     setSelected(null);
+    setRows([]);
+    setCursor(null);
     setError('');
-    load().catch((e) => setError(e.message));
+    load();
   }, [tab]);
   async function loadScores(id, next) {
-    const d = await api(
-      `/admin/publications/${id}/scores${next ? `?cursor=${encodeURIComponent(next)}` : ''}`,
-    );
-    setScores((old) => (next ? [...old, ...d.items] : d.items));
-    setScoresCursor(d.cursor);
+    const isCurrent = beginScores();
+    setScoresLoading(true);
+    try {
+      const d = await api(
+        `/admin/publications/${id}/scores${next ? `?cursor=${encodeURIComponent(next)}` : ''}`,
+      );
+      if (!isCurrent()) return;
+      setScores((old) => (next ? [...old, ...d.items] : d.items));
+      setScoresCursor(d.cursor);
+    } catch (e) {
+      if (isCurrent()) setError(e.message);
+    } finally {
+      if (isCurrent()) setScoresLoading(false);
+    }
   }
   useEffect(() => {
     setScores([]);
     setScoresCursor(null);
-    if (tab === 'publications' && selected)
-      loadScores(selected.id).catch((e) => setError(e.message));
+    setScoresLoading(false);
+    if (tab === 'publications' && selected) loadScores(selected.id);
   }, [tab, selected?.id]);
   async function act(path, body) {
+    beginLookup();
     setBusy(true);
     setError('');
     try {
@@ -60,7 +87,14 @@ export default function CommunityAdmin({ navigate }) {
           <button
             key={name}
             className={`button ${tab === name ? '' : 'outline'}`}
-            onClick={() => setTab(name)}
+            disabled={busy}
+            onClick={() => {
+              if (name === tab) return;
+              setSelected(null);
+              setRows([]);
+              setCursor(null);
+              setTab(name);
+            }}
           >
             {name === 'assets'
               ? 'Photo review'
@@ -82,14 +116,17 @@ export default function CommunityAdmin({ navigate }) {
           className="catalog-search"
           onSubmit={async (e) => {
             e.preventDefault();
+            const isCurrent = beginLookup();
             try {
               const id = lookup.includes('/p/')
                 ? lookup.split('/p/')[1].split(/[/?#]/)[0]
                 : lookup.trim();
-              setSelected(await api(`/admin/publications/${encodeURIComponent(id)}`));
+              const edition = await api(`/admin/publications/${encodeURIComponent(id)}`);
+              if (!isCurrent()) return;
+              setSelected(edition);
               setMessage('');
             } catch (e) {
-              setError(e.message);
+              if (isCurrent()) setError(e.message);
             }
           }}
         >
@@ -102,7 +139,9 @@ export default function CommunityAdmin({ navigate }) {
               required
             />
           </label>
-          <button className="button outline">Find edition</button>
+          <button className="button outline" disabled={busy}>
+            Find edition
+          </button>
         </form>
       )}
       <div className="admin-layout">
@@ -116,12 +155,19 @@ export default function CommunityAdmin({ navigate }) {
                   ? 'Public profiles'
                   : 'Public editions'}
           </h2>
-          {rows.length === 0 && <p>No records yet.</p>}
+          {loading && <p role="status">Loading records…</p>}
+          {!loading && rows.length === 0 && <p>No records yet.</p>}
           {rows.map((r) => (
             <button
               key={r.id}
               className="admin-row"
+              disabled={busy}
               onClick={() => {
+                beginLookup();
+                if (selected?.id !== r.id) {
+                  setScores([]);
+                  setScoresCursor(null);
+                }
                 setSelected(r);
                 setReviewed(false);
                 setMessage('');
@@ -137,10 +183,7 @@ export default function CommunityAdmin({ navigate }) {
             </button>
           ))}
           {cursor && (
-            <button
-              className="text-button"
-              onClick={() => load(cursor).catch((e) => setError(e.message))}
-            >
+            <button className="text-button" disabled={loading || busy} onClick={() => load(cursor)}>
               Load more
             </button>
           )}
@@ -325,6 +368,7 @@ export default function CommunityAdmin({ navigate }) {
                 </button>
               </div>
               <h3>Public scores</h3>
+              {scoresLoading && <p role="status">Loading scores…</p>}
               <p className="small-note">
                 Use the reason above to remove an inappropriate nickname. Manage account
                 restrictions in Public profiles.
@@ -348,9 +392,8 @@ export default function CommunityAdmin({ navigate }) {
               {scoresCursor && (
                 <button
                   className="text-button"
-                  onClick={() =>
-                    loadScores(selected.id, scoresCursor).catch((e) => setError(e.message))
-                  }
+                  disabled={scoresLoading || busy}
+                  onClick={() => loadScores(selected.id, scoresCursor)}
                 >
                   Load more scores
                 </button>

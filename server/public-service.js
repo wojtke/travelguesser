@@ -143,6 +143,10 @@ export function createPublicService(store, log = () => {}) {
           createdAt: Date.now(),
           ...(key.startsWith('p_') ? { expiresAt: new Date(Date.now() + 30 * DAY) } : {}),
         });
+      else if (reason !== 'ranked' && claim.reason === 'ranked')
+        // Exposure is irreversible even if another tab is still playing ranked.
+        // Updating the same claims read at completion serializes concurrent requests.
+        t.set(path(id, 'rankClaims', key), { ...claim, reason });
     }
   }
   async function join(id, a, input) {
@@ -167,6 +171,7 @@ export function createPublicService(store, log = () => {}) {
       const run = {
         ...newRun(game(p), name),
         ranked: !!input.ranked,
+        ...(input.ranked ? { rankedClaimKeys: [...new Set([key, browserKey(a)])] } : {}),
         expiresAt: new Date(Date.now() + 30 * DAY),
         ...(p.dailyDate && input.ranked ? { attemptDeadline: Date.now() + 30 * 60_000 } : {}),
       };
@@ -194,6 +199,22 @@ export function createPublicService(store, log = () => {}) {
         throw new HttpError(403, 'Start a game first.');
       }
       let changed = false;
+      if (run.ranked && !run.completed) {
+        const claims = await Promise.all(
+          (run.rankedClaimKeys || [...new Set([key, browserKey(a)])]).map((claimKey) =>
+            t.get(path(id, 'rankClaims', claimKey)),
+          ),
+        );
+        if (claims.some((claim) => alive(claim) && claim.reason !== 'ranked')) {
+          run = {
+            ...run,
+            ranked: false,
+            rankReason:
+              'This attempt became practice because you opened another practice game or friend room for this trip.',
+          };
+          changed = true;
+        }
+      }
       if (!run.completed && run.attemptDeadline && Date.now() >= run.attemptDeadline) {
         run = { ...run, ranked: false, rankReason: 'The 30-minute ranked attempt expired.' };
         while (!run.completed) {

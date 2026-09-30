@@ -55,6 +55,18 @@ await publicService.publish(publicSource.id, publicSource.ownerUid, {
   rightsConfirmed: true,
   visibilityConfirmed: true,
 });
+const practiceSource = { ...publicSource, id: 'practice-browser-source' };
+await store.beginGame(practiceSource);
+await store.savePhoto(practiceSource.id, '0.jpg', photo);
+await store.publishGame(practiceSource.id, practiceSource.ownerUid, photo.length);
+await publicService.publish(practiceSource.id, practiceSource.ownerUid, {
+  title: 'Practice browser trip',
+  nickname: 'Test creator',
+  tags: ['Practice'],
+  timeLimitSeconds: 60,
+  rightsConfirmed: true,
+  visibilityConfirmed: true,
+});
 const server = createApp({ store, rateLimits: false }).listen(4179, '127.0.0.1');
 async function close() {
   server.close();

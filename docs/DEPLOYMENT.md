@@ -6,6 +6,8 @@ The deploy job builds the existing Dockerfile on a GitHub-hosted Linux runner, b
 
 The production job is serialized and checks whether its commit is still the current `main` before building and immediately before deploying. It creates a ready revision without traffic, promotes that revision, and checks the origin and `https://tripguessr.com` for health, homepage HTML and a loadable JavaScript bundle. The Cloudflare Worker continues to forward to the same service; ordinary app releases do not redeploy it. Revision names contain the GitHub run ID/attempt, and the service carries the commit SHA label.
 
+With public features enabled, release checks also require an official-trip fallback and validate the daily API's current UTC date, reset time, five-photo/60-second metadata and absence of private answer fields. An explicit `trip: null` is the supported degraded state: the check emits a GitHub warning and records **DEGRADED** in the job summary, but permits deployment while official trips remain available. This allows a safe release after content withdrawal without rolling back unrelated fixes. Missing/malformed metadata, stale dates or an unavailable official fallback fail verification and trigger the normal rollback path. Investigate degraded warnings through Admin and the private daily-unavailable alert.
+
 ## Credentials and permissions
 
 [Google Workload Identity Federation](https://docs.cloud.google.com/iam/docs/workload-identity-federation-with-deployment-pipelines) exchanges GitHub OIDC identity for short-lived deployment credentials. Pool `tripguessr-github`, provider `github`, trusts only:

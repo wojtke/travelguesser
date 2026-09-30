@@ -3,7 +3,7 @@ import express from 'express';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import { createRequestLimits } from './request-limits.js';
+import { createRequestLimits, privateNetworkKey } from './request-limits.js';
 import multer from 'multer';
 import sharp from 'sharp';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
@@ -177,6 +177,7 @@ export function createApp({
       : next(new HttpError(403, 'Please refresh the page and try again.'));
   const loginLimiter = rateLimits
     ? rateLimit({
+        keyGenerator: privateNetworkKey,
         windowMs: 15 * 60 * 1000,
         limit: 30,
         standardHeaders: 'draft-8',
@@ -206,6 +207,7 @@ export function createApp({
   );
   const searchLimiter = rateLimits
     ? rateLimit({
+        keyGenerator: privateNetworkKey,
         windowMs: 60_000,
         limit: 20,
         standardHeaders: 'draft-8',
@@ -251,6 +253,7 @@ export function createApp({
   });
   const uploadLimiter = rateLimits
     ? rateLimit({
+        keyGenerator: privateNetworkKey,
         windowMs: 60_000,
         limit: 10,
         standardHeaders: 'draft-8',

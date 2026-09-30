@@ -202,8 +202,10 @@ export default function Game({ id, navigate, notify, publicTrip = false, user, s
                 )}
                 <p className="small-note">
                   {ranked
-                    ? 'One ranked attempt. Replays and friend rooms are practice.'
-                    : 'Practice scores are not published.'}
+                    ? 'One ranked attempt. Opening or joining a friend room for this trip before finishing changes this attempt to practice.'
+                    : game.signedIn
+                      ? 'Practice scores are not published. Starting practice uses your first attempt: you cannot submit a ranked score for this trip afterwards.'
+                      : 'Starting guest practice uses the first attempt in this browser. Sign in before starting if you want a ranked score for this trip.'}
                 </p>
               </div>
             )}
@@ -224,12 +226,16 @@ export default function Game({ id, navigate, notify, publicTrip = false, user, s
               </p>
             )}
             <button className="button full" disabled={busy}>
-              {busy ? <LoaderCircle className="spin" size={18} /> : <Compass size={18} />} Start
-              game <ArrowRight size={18} />
+              {busy ? <LoaderCircle className="spin" size={18} /> : <Compass size={18} />}
+              {publicTrip ? (ranked ? 'Start ranked attempt' : 'Start practice') : 'Start game'}
+              <ArrowRight size={18} />
             </button>
           </form>
           <p className="small-note">
-            <LockKeyhole size={13} /> No sign-up. Your progress is saved in this browser.
+            <LockKeyhole size={13} />{' '}
+            {publicTrip && game.signedIn
+              ? 'Your progress is saved to your account.'
+              : 'No sign-up needed for practice. Your progress is saved in this browser.'}
           </p>
         </div>
       </main>
@@ -393,6 +399,11 @@ export default function Game({ id, navigate, notify, publicTrip = false, user, s
               </div>
             </div>
             {result.caption && <p className="reveal-caption">{result.caption}</p>}
+            {publicTrip && run.rankReason && (
+              <p className="small-note" role="status">
+                {run.rankReason}
+              </p>
+            )}
             <PhotoCredit credit={result.credit} />
             <button className="button full" disabled={busy} onClick={nextRound}>
               {run.completed ? 'See results' : 'Next photo'} <ArrowRight size={18} />

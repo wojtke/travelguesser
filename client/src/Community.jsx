@@ -5,6 +5,7 @@ import { api, json, copyLink } from './api';
 import { Standings, ScoreMatrix } from './ResultsPanels';
 import GameSettings, { defaultSettings, SecondsInput } from './GameSettings';
 import Modal from './Modal';
+import useRequestGuard from './useRequestGuard';
 
 export function Explore({ navigate }) {
   const [query, setQuery] = useState(''),
@@ -14,22 +15,27 @@ export function Explore({ navigate }) {
     [busy, setBusy] = useState(false),
     [error, setError] = useState('');
   const [search, setSearch] = useState('');
+  const beginRequest = useRequestGuard(JSON.stringify([kind, search]));
   async function load(next, selectedKind = kind, term = search) {
+    const isCurrent = beginRequest();
     setBusy(true);
     setError('');
     try {
       const d = await api(
         `/catalog?${new URLSearchParams({ q: term, kind: selectedKind, ...(next ? { cursor: next } : {}) })}`,
       );
+      if (!isCurrent()) return;
       setItems((old) => (next ? [...old, ...d.items] : d.items));
       setCursor(d.cursor);
     } catch (e) {
-      setError(e.message);
+      if (isCurrent()) setError(e.message);
     } finally {
-      setBusy(false);
+      if (isCurrent()) setBusy(false);
     }
   }
   useEffect(() => {
+    setItems([]);
+    setCursor(null);
     load(null);
   }, [kind, search]);
   return (
@@ -134,6 +140,8 @@ export function PublicTrip({ id, navigate, notify, user, signIn }) {
     [cursor, setCursor] = useState(null),
     [error, setError] = useState(''),
     [hosting, setHosting] = useState(false),
+    [hostingError, setHostingError] = useState(''),
+    [existingRoom, setExistingRoom] = useState(null),
     [busy, setBusy] = useState(false),
     [name, setName] = useState(''),
     [settings, setSettings] = useState({
@@ -239,11 +247,17 @@ export function PublicTrip({ id, navigate, notify, user, signIn }) {
             onSubmit={async (e) => {
               e.preventDefault();
               setBusy(true);
+              setHostingError('');
+              setExistingRoom(null);
               try {
                 const r = await api(`/publications/${id}/live`, json('POST', { name, settings }));
                 navigate(`/p/${id}/live/${r.id}`);
               } catch (e) {
-                notify(e.message);
+                setHostingError(e.message);
+                if (e.status === 409) {
+                  const profile = await api('/public-profile').catch(() => null);
+                  setExistingRoom(profile?.activeRoom || null);
+                }
               } finally {
                 setBusy(false);
               }
@@ -261,8 +275,23 @@ export function PublicTrip({ id, navigate, notify, user, signIn }) {
             <GameSettings value={settings} onChange={setSettings} showMode={false} />
             <p className="small-note">
               You can watch or join as a player. Opening a room uses your first-attempt eligibility
-              for this trip. Share the room link with your friends.
+              for this trip, including any ranked attempt still in progress. Share the room link
+              with your friends.
             </p>
+            {hostingError && (
+              <p className="error" role="alert">
+                {hostingError}
+              </p>
+            )}
+            {existingRoom && (
+              <button
+                type="button"
+                className="button outline"
+                onClick={() => navigate(`/p/${existingRoom.publicationId}/live/${existingRoom.id}`)}
+              >
+                Open existing lobby
+              </button>
+            )}
             <button className="button" disabled={busy}>
               Create private room
             </button>

@@ -169,7 +169,12 @@ export default function useLiveSession(id, liveId, publicTrip = false) {
     setBusy(true);
     setError('');
     try {
-      accept(await api(`${base}/${type}`, json('POST', { round: latest.current?.round, ...body })));
+      const data = await api(
+        `${base}/${type}`,
+        json('POST', { round: latest.current?.round, ...body }),
+      );
+      accept(data);
+      return data;
     } catch (e) {
       setError(e.message);
       if ([403, 404, 410].includes(e.status)) refresh();

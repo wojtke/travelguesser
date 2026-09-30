@@ -10,6 +10,34 @@ import { newRun } from '../server/game.js';
 import { DEMO_RETENTION_MS } from '../server/demo-retention.js';
 import { newLive, updateLive } from '../server/live.js';
 import { testAuthentication } from './helpers.js';
+import { signIn } from './helpers.js';
+import { MemoryStore } from 'express-rate-limit';
+import { privateNetworkKey } from '../server/request-limits.js';
+
+test('login, search and upload counters retain only hashed network keys', async (t) => {
+  const app = createApp({ auth: testAuthentication(), store: {}, searchLocations: async () => [] });
+  const agent = request.agent(app).set('X-Forwarded-For', '192.0.2.42');
+  await signIn(agent, 'creator-test');
+  const keys = [],
+    increment = MemoryStore.prototype.increment;
+  t.mock.method(MemoryStore.prototype, 'increment', function (key) {
+    keys.push(key);
+    return increment.call(this, key);
+  });
+  await agent.post('/api/auth/session').send({ idToken: 'invalid' }).expect(401);
+  await agent.post('/api/host/locations/search').send({ query: 'Warsaw' }).expect(200);
+  await agent.post('/api/games').send({}).expect(400);
+  assert.ok(keys.length >= 12);
+  assert.ok(keys.every((key) => key === 'all' || /^[a-f0-9]{64}$/.test(key)));
+  assert.equal(
+    privateNetworkKey({ ip: '2001:db8:1234:1::1' }),
+    privateNetworkKey({ ip: '2001:db8:1234:2::2' }),
+  );
+  assert.notEqual(
+    privateNetworkKey({ ip: '2001:db8:1234:1::1' }),
+    privateNetworkKey({ ip: '2001:db8:1234:100::1' }),
+  );
+});
 
 test('rotating player cookies cannot bypass early network throttling or invoke authentication', async () => {
   let verifications = 0;

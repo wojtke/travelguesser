@@ -52,7 +52,7 @@ The public health endpoint tests DNS/TLS, Cloudflare, Cloud Run and the web proc
 ## Logging and privacy
 
 - Request records contain only fixed route names (such as `/api/games/:trip/live/:lobby`), an allowed HTTP method, status, duration and an optional fixed activity name. Raw unknown paths become `other`; assets become `/assets/*`.
-- Abuse limits keep short-lived, per-process counters keyed by a randomly salted network-address hash. They are not analytics and are not persisted or included in logs.
+- Abuse limits keep short-lived, per-process counters keyed by a randomly salted network-address hash, including sign-in, place-search and upload counters. They are not analytics and are not persisted or included in logs.
 - No request bodies, headers, IPs, referrers, user-agent strings, query parameters, credentials, creator/player identifiers, trip/lobby IDs, names, coordinates or photo contents are included in these application records.
 - Error diagnostics keep a bounded error type/code and code file/line locations. Error messages, causes and dynamic function names are discarded. Runtime warnings are recorded at WARNING, crashes at CRITICAL. Third-party/runtime stderr and provider security/exception diagnostics are separate and may still include context; do not promise that every provider record is anonymous.
 - After checking the replacement logs, the `_Default` sink excludes new `run.googleapis.com/requests` entries **only for this service**. This avoids storing the raw URL and IP in ordinary request history. The provider still processes a request before the storage exclusion applies. Built-in metrics, structured application logs, system logs and required audit logs remain.

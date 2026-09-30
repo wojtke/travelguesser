@@ -29,6 +29,7 @@ Trips are **link-only by default**. Owners can explicitly publish a separate pub
 - [Costs, free tiers, service limits and traffic estimates](docs/COSTS-AND-LIMITS.md)
 - [Privacy controls, retention and request handling](docs/PRIVACY-OPERATIONS.md)
 - [Traffic dashboard, uptime checks and privacy-conscious monitoring](docs/OBSERVABILITY.md)
+- [Application review and resolution record](docs/reviews/2026-09-30-app-review.md)
 
 ## Run locally
 
@@ -138,7 +139,7 @@ Legacy host keys no longer grant access. The deployment removes the old `HOST_KE
 - Scores use `round(5000 × exp(-distanceKm / 1500))`; 5,000 points for an exact guess. Distance uses the haversine formula.
 - A secure, HttpOnly browser cookie identifies each friend. Closing/reopening the page resumes the game. Clearing cookies or changing devices starts a new entry. This is a friendly game, not a cheat-proof competition.
 - Only explicitly published editions appear in Explore. Anyone with an unlisted trip link can play and see its photos; share those links only with intended friends. Hosts can pause link access or delete trips and their leaderboards.
-- No Google Maps key, email delivery setup, or player accounts are required. OpenStreetMap tiles require internet access. In-memory request limits apply per server instance: 900 API requests/minute per network and 3,000 total/minute before authentication/database access, plus 500 ordinary requests/15 minutes or 45 live requests/minute per player. Network keys are transient salted hashes, never saved to the database or logs. These are abuse controls, not a hard spending cap.
+- No Google Maps key, email delivery setup, or player accounts are required. OpenStreetMap tiles require internet access. In-memory request limits apply per server instance: 3,000 API requests/minute per network and 6,000 total/minute before authentication/database access, plus 500 ordinary requests/15 minutes or 45 live requests/minute per player. The [operating limits reference](docs/COSTS-AND-LIMITS.md#app-limits-and-live-session-design) includes draft and upload limits. Network keys, including sign-in, search and upload counters, are transient salted hashes, never saved to the database or logs. These are abuse controls, not a hard spending cap.
 
 ## Reference and asset credits
 

@@ -285,7 +285,7 @@ test('public search, ranked consent, results, replay and withdrawal work end to 
   await expect(consent).not.toBeChecked();
   await consent.check();
   await page.getByLabel('Your name', { exact: true }).fill('Public test player');
-  await page.getByRole('button', { name: 'Start game' }).click();
+  await page.getByRole('button', { name: 'Start ranked attempt' }).click();
   await expect(page.locator('.photo-canvas img')).toBeVisible();
   await page.locator('.guess-map').click({ position: { x: 100, y: 100 } });
   await page.getByRole('button', { name: /Confirm guess/ }).click();
@@ -319,6 +319,8 @@ test('a report returns a working private receipt and a public room can be hosted
   await page.getByRole('button', { name: 'Create private room' }).click();
   await expect(page.getByRole('button', { name: 'Start first round' })).toBeVisible();
   await expect(page.getByRole('radio', { name: /Host only/ })).toBeChecked();
+  await page.getByRole('button', { name: 'Close lobby' }).click();
+  await expect(page.getByRole('heading', { name: p.title, exact: true })).toBeVisible();
   await page.goto(`/contact?target=${encodeURIComponent(`/p/${p.id}`)}`);
   await page.getByLabel('Describe the issue').fill('Synthetic browser test report.');
   await page.getByRole('checkbox', { name: /This report is accurate/ }).check();

@@ -9,6 +9,7 @@ import { LocalStore } from '../server/store.js';
 import { createPublicService } from '../server/public-service.js';
 import { scheduleDailies, searchPrefixes, identityKey, DAY } from '../server/public-content.js';
 import { testAuthentication, signIn } from './helpers.js';
+import { updateLive } from '../server/live.js';
 
 async function fixture(t, photos = 1) {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'tripguessr-public-'));
@@ -162,6 +163,74 @@ test('public friend rooms have independent hosts, rounds and private drafts', as
   assert.equal(other.body.results.length, 0);
   await a.post(`${base}/live/${roomA.id}/reveal`).send({ round: 0 }).expect(200);
   assert.equal((await guest.get(`${base}/live/${roomA.id}`)).body.results[0].score, 5000);
+});
+
+test('hosting or joining a friend room downgrades an unfinished ranked attempt', async (t) => {
+  for (const mode of ['host', 'join', 'legacy']) {
+    const { a, b, base, s, publication } = await fixture(t);
+    await a.post(`${base}/join`).send({ name: 'Ranked', ranked: true, consent: true }).expect(200);
+    if (mode === 'legacy')
+      await s.data.transaction(async (tx) => {
+        const key = s.path(publication.id, 'publicRuns', s.actorKey({ uid: 'creator-a' }));
+        const run = await tx.get(key);
+        delete run.rankedClaimKeys;
+        tx.set(key, run);
+      });
+    const host = mode === 'join' ? b : a;
+    const room = (await host.post(`${base}/live`).send({ name: 'Host' }).expect(201)).body;
+    await a.post(`${base}/live/${room.id}/join`).send({ name: 'Player' }).expect(200);
+    await host.post(`${base}/live/${room.id}/start`).send({ round: 0 }).expect(200);
+    await s.data.transaction(async (tx) => {
+      const key = s.path(publication.id, 'publicRooms', room.id),
+        live = await tx.get(key);
+      tx.set(key, {
+        ...live,
+        phase: 'round',
+        startsAt: Date.now() - 100,
+        startedAt: Date.now() - 100,
+      });
+    });
+    await host.post(`${base}/live/${room.id}/reveal`).send({ round: 0 }).expect(200);
+    assert.ok((await a.get(`${base}/live/${room.id}`)).body.results[0].actual);
+    const result = await a.post(`${base}/guess`).send({ round: 0, lat: 0, lng: 0 }).expect(200);
+    assert.equal(result.body.run.ranked, false, mode);
+    assert.match(result.body.run.rankReason, /became practice/);
+    assert.deepEqual((await a.get(`${base}/leaderboard`)).body.items, []);
+  }
+});
+
+test('ranked eligibility follows the original browser when the account resumes elsewhere', async (t) => {
+  const { s, publication } = await fixture(t);
+  const id = publication.id,
+    player = { uid: 'browser-player', playerId: 'original-browser' },
+    guest = { playerId: player.playerId },
+    host = { uid: 'other-host', playerId: 'host-browser' };
+  const start = await s.join(id, player, { name: 'Ranked', ranked: true, consent: true });
+  assert.ok(!JSON.stringify(start).includes('rankedClaimKeys'));
+  const g = await s.createRoom(id, host, {});
+  await s.mutateRoom(
+    id,
+    g.live.id,
+    (game) => updateLive(game, g.live.id, guest, 'join', { name: 'Guest' }),
+    guest,
+    'join',
+  );
+  const { run } = await s.updateRun(id, { ...player, playerId: 'new-browser' }, 'guess', {
+    round: 0,
+    lat: 0,
+    lng: 0,
+  });
+  assert.equal(run.ranked, false);
+  assert.equal((await s.board(id)).length, 0);
+});
+
+test('live exposure does not retract a ranked score completed beforehand', async (t) => {
+  const { a, base } = await fixture(t);
+  await a.post(`${base}/join`).send({ name: 'Ranked', ranked: true, consent: true }).expect(200);
+  await a.post(`${base}/guess`).send({ round: 0, lat: 0, lng: 0 }).expect(200);
+  await a.post(`${base}/live`).send({ name: 'Host' }).expect(201);
+  assert.equal((await a.get(base)).body.run.ranked, true);
+  assert.equal((await a.get(`${base}/leaderboard`)).body.items.length, 1);
 });
 
 test('reports are private, replies work without sign-in, and moderation cannot be bypassed by republishing', async (t) => {
