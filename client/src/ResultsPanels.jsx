@@ -127,10 +127,21 @@ function MiniMap({ result }) {
       ) : (
         <div className="mini-map-placeholder" aria-hidden="true" />
       )}
-      <button className="text-button" onClick={() => setExpanded((v) => !v)}>
+      <button
+        className="text-button"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((v) => !v)}
+      >
         {expanded ? 'Collapse map' : 'Expand map'}
       </button>
-      <p className="small-note">Your guess → actual location</p>
+      <div className="mini-map-legend">
+        <span>
+          <i className="guess-dot" /> Your guess
+        </span>
+        <span>
+          <i className="actual-dot" /> Actual location
+        </span>
+      </div>
     </div>
   );
 }
@@ -147,11 +158,11 @@ export function RoundCards({ id, results, photoUrl }) {
               alt={`Photo from round ${(r.round ?? i) + 1}`}
             />
             <h3>Round {(r.round ?? i) + 1}</h3>
-            <p>
+            <p className="round-card-stats">
               {formatDistance(r.distance)} · <strong>{r.score.toLocaleString()} pts</strong> ·{' '}
               {duration(r.durationMs)}
             </p>
-            {r.caption && <p>{r.caption}</p>}
+            {r.caption && <p className="round-card-caption">{r.caption}</p>}
             <PhotoCredit credit={r.credit} />
             {r.actual && <MiniMap result={r} />}
           </article>

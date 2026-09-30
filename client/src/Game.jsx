@@ -66,6 +66,7 @@ export default function Game({ id, navigate, notify, publicTrip = false, user, s
         json('POST', { name, ranked: publicTrip && ranked, consent: publicTrip && ranked }),
       );
       setRun(data);
+      if (!publicTrip && data.game) setGame(data.game);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -257,28 +258,33 @@ export default function Game({ id, navigate, notify, publicTrip = false, user, s
           </div>
           <ShareActions id={id} notify={notify} publicTrip={publicTrip} />
           {publicTrip && (
-            <div className="center-buttons">
-              <p>
+            <div className="result-follow-up">
+              <p className="result-rank-status">
                 {run.ranked
                   ? 'Ranked first attempt'
                   : run.rankReason || 'Practice result — not on the public leaderboard.'}
               </p>
-              <button
-                className="button outline"
-                onClick={async () => {
-                  try {
-                    setRun(
-                      await api(`${base}/join`, json('POST', { name: run.name, restart: true })),
-                    );
-                    setResult(null);
-                    setPin(null);
-                  } catch (e) {
-                    notify(e.message);
-                  }
-                }}
-              >
-                Play again for practice
-              </button>
+              <div className="center-buttons result-play-actions">
+                <button
+                  className="button outline"
+                  onClick={async () => {
+                    try {
+                      setRun(
+                        await api(`${base}/join`, json('POST', { name: run.name, restart: true })),
+                      );
+                      setResult(null);
+                      setPin(null);
+                    } catch (e) {
+                      notify(e.message);
+                    }
+                  }}
+                >
+                  Play again for practice
+                </button>
+                <button className="button outline" onClick={() => navigate(`/p/${id}`)}>
+                  Back to public trip
+                </button>
+              </div>
               {run.ranked && (
                 <button
                   className="text-button"
@@ -297,14 +303,13 @@ export default function Game({ id, navigate, notify, publicTrip = false, user, s
                   Remove my public score
                 </button>
               )}
-              <button className="text-button" onClick={() => navigate(`/p/${id}`)}>
-                Back to public trip
-              </button>
             </div>
           )}
-          <button className="button outline" onClick={() => navigate('/')}>
-            Back home
-          </button>
+          {!publicTrip && (
+            <button className="text-button result-home-link" onClick={() => navigate('/')}>
+              Back home
+            </button>
+          )}
         </div>
         <RoundCards
           id={id}

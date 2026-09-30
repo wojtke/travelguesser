@@ -30,6 +30,12 @@ function App() {
     [toast, setToast] = useState('');
   const notify = (message) => setToast(message);
   const navigate = (path) => {
+    if (
+      !window.dispatchEvent(
+        new CustomEvent('tripguessr:navigate', { cancelable: true, detail: path }),
+      )
+    )
+      return;
     history.pushState({}, '', path);
     const target = new URL(path, location.origin);
     setRoute(target.pathname + target.search);
@@ -161,22 +167,24 @@ function App() {
           <div className="loading-page">
             <LoaderCircle className="spin" /> Loading…
           </div>
-        ) : path === '/create' ? (
+        ) : path === '/create' || /^\/g\/[^/]+\/edit\/?$/.test(path) ? (
           host ? (
             <CreateTrip
+              key={path}
+              id={path === '/create' ? null : path.split('/')[2]}
               user={user}
               navigate={navigate}
               notify={notify}
-              signIn={() => setLogin('/create')}
+              signIn={() => setLogin(path)}
             />
           ) : (
             <div className="narrow-page">
               <LockKeyhole size={38} />
-              <h1>Create a trip</h1>
+              <h1>{path === '/create' ? 'Create a trip' : 'Edit your trip'}</h1>
               <p>
                 Sign in with Google to create and manage trips. Friends can play without signing in.
               </p>
-              <button className="button" onClick={() => setLogin('/create')}>
+              <button className="button" onClick={() => setLogin(path)}>
                 Continue with Google <ArrowRight size={18} />
               </button>
             </div>

@@ -7,6 +7,7 @@ import {
   HttpError,
   photoOrder,
   scoreGuess,
+  tripSnapshot,
 } from './game.js';
 import { resultSummary } from './results.js';
 export const LIVE_LIMITS = { players: 20, lifetimeHours: 24, pollMs: 3000 };
@@ -23,6 +24,7 @@ export function newLive(game, input = {}, now = Date.now()) {
   return {
     ...game,
     live: {
+      tripSnapshot: tripSnapshot(game),
       id: randomBytes(16).toString('base64url'),
       protocolVersion: 2,
       revision: 0,
@@ -36,6 +38,9 @@ export function newLive(game, input = {}, now = Date.now()) {
       players: {},
     },
   };
+}
+export function liveGame(game) {
+  return { ...game, ...(game.live?.tripSnapshot || game.originalTrip || {}) };
 }
 export function getLive(game, id, now = Date.now()) {
   if (!game?.live || game.live.id !== id)
@@ -51,7 +56,7 @@ export function canViewLive(game, actor) {
 }
 function finishRound(game, live, now, drafts = {}) {
   const photoIndex = live.order[live.round],
-    photo = game.photos[photoIndex],
+    photo = liveGame(game).photos[photoIndex],
     actual = { lat: photo.lat, lng: photo.lng };
   const players = Object.fromEntries(
     Object.entries(live.players).map(([id, p]) => {
@@ -138,7 +143,8 @@ export function updateLive(game, id, actor, action, input = {}, now = Date.now()
     )
       return game;
     const round = action === 'start' ? 0 : live.round + 1;
-    if (round >= game.photos.length) live = { ...live, phase: 'finished', finishedAt: now };
+    if (round >= liveGame(game).photos.length)
+      live = { ...live, phase: 'finished', finishedAt: now };
     else {
       const roster = Object.entries(live.players)
         .filter(([, p]) => p.active)
@@ -250,6 +256,7 @@ export function validateDraft(game, id, actor, input, previous, now = Date.now()
   };
 }
 export function publicLive(game, actor, now = Date.now()) {
+  game = liveGame(game);
   const l = game.live,
     me = l.players[actor.playerId],
     isHost = !!actor.uid && actor.uid === game.ownerUid;

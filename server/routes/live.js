@@ -1,6 +1,6 @@
 import { createLiveStreams } from '../live-streams.js';
 import { HttpError } from '../game.js';
-import { expireLive, getLive, newLive, publicLive, updateLive } from '../live.js';
+import { expireLive, getLive, liveGame, newLive, publicLive, updateLive } from '../live.js';
 export function registerLiveRoutes(app, { store, requireCreator, requireCsrf, log }) {
   app.get('/api/games/:gameId/live/:liveId/events', createLiveStreams(store, log));
   app.post('/api/games/:gameId/live/:liveId/draft', requireCsrf, async (req, res) => {
@@ -77,7 +77,7 @@ export function registerLiveRoutes(app, { store, requireCreator, requireCsrf, lo
       round > l.round
     )
       throw new HttpError(403, 'This photo is not available yet.');
-    const photo = req.game.photos[l.order[round]];
+    const photo = liveGame(req.game).photos[l.order[round]];
     const buffer = await store.getPhoto(req.game.id, photo.key);
     res.type('jpeg').set('Cache-Control', 'private, no-store').send(buffer);
   });

@@ -10,6 +10,7 @@ import {
   Plus,
   Link,
   Trash2,
+  Pencil,
 } from 'lucide-react';
 import { api, json, copyLink } from './api';
 import DailyCard from './DailyCard';
@@ -170,47 +171,63 @@ export default function Home({ host, create, navigate, notify, community = false
             </p>
           )}
           {profile?.scores?.length > 0 && (
-            <details className="panel">
-              <summary>My public scores</summary>
-              {profile.scores.map((r) => (
-                <p key={r.id}>
-                  {r.title}{' '}
+            <details className="panel my-public-scores">
+              <summary>
+                My public scores{' '}
+                <span>
+                  {profile.scores.length}
+                  {profile.cursor ? '+' : ''}
+                </span>
+              </summary>
+              <div className="my-public-scores-list">
+                {profile.scores.map((r) => (
+                  <div className="my-public-score" key={r.id}>
+                    <a
+                      href={`/p/${r.id}`}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        navigate(`/p/${r.id}`);
+                      }}
+                    >
+                      {r.title}
+                    </a>
+                    <button
+                      className="text-button"
+                      onClick={async () => {
+                        try {
+                          await api(`/publications/${r.id}/leaderboard/me`, { method: 'DELETE' });
+                          setProfile((p) => ({
+                            ...p,
+                            scores: p.scores.filter((s) => s.id !== r.id),
+                          }));
+                          notify('Your public score was removed.');
+                        } catch (e) {
+                          notify(e.message);
+                        }
+                      }}
+                    >
+                      Remove my score
+                    </button>
+                  </div>
+                ))}
+                {profile.cursor && (
                   <button
                     className="text-button"
                     onClick={async () => {
                       try {
-                        await api(`/publications/${r.id}/leaderboard/me`, { method: 'DELETE' });
-                        setProfile((p) => ({
-                          ...p,
-                          scores: p.scores.filter((s) => s.id !== r.id),
-                        }));
-                        notify('Your public score was removed.');
+                        const more = await api(
+                          `/public-profile?cursor=${encodeURIComponent(profile.cursor)}`,
+                        );
+                        setProfile((p) => ({ ...more, scores: [...p.scores, ...more.scores] }));
                       } catch (e) {
                         notify(e.message);
                       }
                     }}
                   >
-                    Remove my score
+                    Load more scores
                   </button>
-                </p>
-              ))}
-              {profile.cursor && (
-                <button
-                  className="text-button"
-                  onClick={async () => {
-                    try {
-                      const more = await api(
-                        `/public-profile?cursor=${encodeURIComponent(profile.cursor)}`,
-                      );
-                      setProfile((p) => ({ ...more, scores: [...p.scores, ...more.scores] }));
-                    } catch (e) {
-                      notify(e.message);
-                    }
-                  }}
-                >
-                  Load more scores
-                </button>
-              )}
+                )}
+              </div>
             </details>
           )}
           {loadError && (
@@ -240,6 +257,12 @@ export default function Home({ host, create, navigate, notify, community = false
                     </p>
                   </div>
                   <div className="trip-card-actions">
+                    <button
+                      className="button outline small"
+                      onClick={() => navigate(`/g/${game.id}/edit`)}
+                    >
+                      <Pencil size={15} /> Edit trip
+                    </button>
                     {community && (
                       <button className="button outline small" onClick={() => setPublishing(game)}>
                         Public sharing

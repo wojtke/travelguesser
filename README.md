@@ -14,6 +14,10 @@ Live hosts watch by default or opt to play. The host starts the first round; lat
 
 Live sessions use SSE through the existing server and one Firestore listener per room per instance, with polling fallback. Streams reconnect every 45 seconds and disconnect in hidden/finished tabs. A connected room keeps Cloud Run billable; see [cost assumptions](docs/COSTS-AND-LIMITS.md). Lobby links/private drafts expire after 24 hours; stored lobby results remain until replaced/deleted. Existing lobbies retain their older protocol. `/g/<trip-id>` opens the active lobby, then supports independent play after it ends. Existing solo results are retained. See [migration and retention operations](docs/PRIVACY-OPERATIONS.md).
 
+## Editing your trips
+
+Open **My trips → Edit trip** to update photos, order, captions, locations, title and game options. The invite link stays the same. Existing playthroughs and public editions keep their original photos and rules; new games use the changes. Earlier media counts toward the existing 24 MiB per-trip storage allowance until trip deletion. See [editing behavior, recovery and validation](docs/TRIP-EDITING.md).
+
 ## Public trips and daily challenges
 
 [Explore public trips](https://tripguessr.com/explore): opt-in community editions, official five-photo trips, and a daily challenge that changes at midnight UTC. Guests can practise; Google sign-in and public-score consent enable one ranked first attempt per edition. Rankings use points then guessing time. Players can withdraw their scores. Any signed-in user can create a separate private friend room on a public trip.

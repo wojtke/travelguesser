@@ -24,7 +24,7 @@ This release implements a privacy baseline. Publishing a notice alone does not e
 | --- | --- | --- |
 | Creator UID, email/basic profile, account/sign-in metadata | Firebase Authentication / Identity Platform | Until account deletion; not copied into game results. |
 | Trips, host names, coordinates/captions, solo runs/leaderboards, current live state | Firestore, Warsaw | Owner trip deletion removes game and child collections. Previous live state is replaced on a new lobby. No automatic published-trip expiry. |
-| Processed photos | Private GCS bucket, Warsaw | Removed from active storage with trip deletion, then **7-day soft-delete retention**. No original file names/originals retained. |
+| Processed photos | Private GCS bucket, Warsaw | Current and earlier edited photos remain for existing games/public editions until trip deletion, within a 24 MiB per-trip cap. Removed from active storage with trip deletion, then **7-day soft-delete retention**. No original file names/originals retained. |
 | Live invite | Embedded in trip document | Access expires after **24h**; expiry is **not physical deletion**. |
 | Sanitized application logs and remaining default logs | Google Cloud Logging | `_Default`: **30 days**. New raw request entries for this service are excluded; older entries expire normally. |
 | Required audit logs | Google Cloud Logging | Verified `_Required`: **400 days**. Other providers have their own security/operational retention. |
@@ -70,3 +70,5 @@ Deleting a source trip recursively removes its public edition, scores, rooms, cl
 Public rankings use separately revocable consent. Keep consent/terms version and purpose descriptions current; do not add personal emails, Google names or precise guesses to public rankings. Private report messages and decisions must not appear in public logs or GitHub. Contact email is optional; private receipt links contain access secrets. A reporter can use the same receipt for an appeal. No automated email is sent to reporters.
 
 Public sharing changes the service's legal context. The EU Digital Services Act's scope and small/micro-provider exceptions, Poland's electronic-services act (including operator contact/address obligations if applicable), and a free hobby service's economic character need a focused legal assessment before commercial operation or wider promotion. The implemented reporting/reasons/appeal baseline is not a finding that every obligation is met or exempt. Do not publish a home address or personal mailbox as a shortcut. Review vendor processing arrangements and licensing/property/personality rights alongside copyright.
+
+Trip editing stores private configuration snapshots in solo runs and live lobbies, plus `originalTrip` for legacy plays. Include these fields when handling a correction or erasure request; removing a photo from the current editor alone does not erase historical content. See [editing and recovery](TRIP-EDITING.md).

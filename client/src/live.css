@@ -423,3 +423,58 @@
     font-size: 10px;
   }
 }
+
+.my-public-scores {
+  margin: 0 0 24px;
+  overflow: hidden;
+}
+.my-public-scores > summary {
+  padding: 18px 22px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.my-public-scores > summary > span {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  background: var(--light);
+  font-size: 12px;
+}
+.my-public-scores[open] > summary {
+  border-bottom: 1px solid var(--line);
+}
+.my-public-scores-list {
+  padding: 0 22px 14px;
+}
+.my-public-score {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+}
+.my-public-score:last-child {
+  border-bottom: 0;
+}
+.my-public-score > a {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+}
+.my-public-score .text-button {
+  font-size: 12px;
+}
+.trip-card-actions {
+  width: 100%;
+  justify-content: flex-start;
+  margin: 4px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.trip-card-actions .button {
+  margin: 0;
+}

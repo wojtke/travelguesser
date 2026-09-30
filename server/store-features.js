@@ -18,7 +18,13 @@ function sourceRun(game, actor, source, solo) {
   if (l.phase !== 'finished')
     throw new HttpError(409, 'Finish the session before sharing results.');
   const p = l.players[actor.playerId];
-  return { ...p, order: l.order, completed: true, finishedAt: l.finishedAt };
+  return {
+    ...p,
+    tripSnapshot: l.tripSnapshot || game.originalTrip,
+    order: l.order,
+    completed: true,
+    finishedAt: l.finishedAt,
+  };
 }
 export function installStoreFeatures(LocalStore, CloudStore) {
   LocalStore.prototype.watchGame = function (id, onData, onError = () => {}) {

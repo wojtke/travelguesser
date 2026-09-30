@@ -5,6 +5,7 @@ import { CloudStore } from '../../server/store.js';
 import { newRun } from '../../server/game.js';
 import { DEMO_RETENTION_MS } from '../../server/demo-retention.js';
 import { newLive, updateLive, publicLive } from '../../server/live.js';
+import { reserveTripEdit, commitTripEdit } from '../../server/trip-editing.js';
 
 if (!/^127\.0\.0\.1:\d+$/.test(process.env.FIRESTORE_EMULATOR_HOST || ''))
   throw new Error('Tests require a local Firestore emulator. Production access is forbidden.');
@@ -32,6 +33,52 @@ async function publish(game) {
   await store.beginGame(game);
   return store.publishGame(game.id, game.ownerUid, 10);
 }
+
+test('Firestore edits serialize across instances and preserve old runs while updating storage usage', async () => {
+  const original = await publish(fixture('edit-firestore-trip', 'edit-owner'));
+  const second = new CloudStore({ db, bucket: {} });
+  await store.join(original.id, 'old-player', 'Old player', original);
+  const reservations = await Promise.allSettled(
+    [store, second].map((s, i) =>
+      reserveTripEdit(s, original.id, 'edit-owner', 0, {
+        token: `edit-${i}`,
+        bytes: 100,
+        keys: [`edit-${i}.jpg`],
+        createdAt: Date.now(),
+      }),
+    ),
+  );
+  assert.equal(reservations.filter((r) => r.status === 'fulfilled').length, 1);
+  assert.equal(reservations.find((r) => r.status === 'rejected').reason.status, 409);
+  const reserved = await store.getGame(original.id);
+  await commitTripEdit(second, original.id, 'edit-owner', 0, reserved.editUpload.token, {
+    title: 'Edited version',
+    photos: [{ key: reserved.editUpload.keys[0], lat: 20, lng: 30 }],
+  });
+  const edited = await store.getGame(original.id);
+  assert.equal(edited.tripRevision, 1);
+  assert.equal((await store.getUsage('edit-owner')).storageBytes, 110);
+  assert.equal(
+    (await store.guess(edited, 'old-player', { round: 0, lat: 0, lng: 0 })).result.score,
+    5000,
+  );
+  await second.join(original.id, 'new-player', 'New player', original);
+  assert.equal(
+    (await second.guess(original, 'new-player', { round: 0, lat: 20, lng: 30 })).result.score,
+    5000,
+  );
+  assert.equal((await store.leaderboard(original.id, 0))[0].name, 'Old player');
+  assert.equal((await store.leaderboard(original.id, 1))[0].name, 'New player');
+  await assert.rejects(
+    reserveTripEdit(store, original.id, 'edit-owner', 0, {
+      token: 'stale',
+      bytes: 0,
+      keys: [],
+      createdAt: Date.now(),
+    }),
+    { status: 409 },
+  );
+});
 
 test('Firestore retries concurrent guesses without double scoring and recursively deletes gameplay data', async () => {
   const game = await publish(fixture('concurrent-trip'));

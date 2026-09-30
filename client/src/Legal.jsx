@@ -170,14 +170,17 @@ export default function Legal({ page }) {
           <p>
             For original link-only trips, uploaded photos, solo scores and stored lobby state remain
             until the creator deletes the trip or we remove it following a valid request or abuse
-            report. Saved live pins expire with the 24-hour lobby. Shared result snapshots expire
-            after 30 days, including if the host has since opened a new lobby. Expired pins and
-            snapshots are queued for automatic database deletion, normally within another 24 hours.
-            A live link expires 24 hours after creation; expiry blocks access, but is not automatic
-            data deletion. Opening a new lobby replaces the previous lobby’s state. Creator account
-            records remain until account deletion is requested. Demo progress and demo scores expire
-            after 30 days. Expired demo records are hidden immediately and queued for automatic
-            database deletion, which normally completes within another 24 hours.
+            report. Editing a trip applies to new games. Earlier photos, captions, locations and
+            rules remain available to existing games and public editions until the trip is deleted;
+            removing a photo from the editor does not erase those earlier copies. Saved live pins
+            expire with the 24-hour lobby. Shared result snapshots expire after 30 days, including
+            if the host has since opened a new lobby. Expired pins and snapshots are queued for
+            automatic database deletion, normally within another 24 hours. A live link expires 24
+            hours after creation; expiry blocks access, but is not automatic data deletion. Opening
+            a new lobby replaces the previous lobby’s state. Creator account records remain until
+            account deletion is requested. Demo progress and demo scores expire after 30 days.
+            Expired demo records are hidden immediately and queued for automatic database deletion,
+            which normally completes within another 24 hours.
           </p>
           <p>
             Deleting a trip removes its active database records and photos. Cloud Storage retains

@@ -16,6 +16,7 @@ const photo = await sharp({
 for (const [id, mode] of [
   ['timed-browser-trip', 'solo'],
   ['live-browser-trip', 'live'],
+  ['editable-browser-trip', 'solo'],
 ]) {
   const game = {
     id,

@@ -33,12 +33,14 @@ export default function Map({
   const element = useRef(null),
     map = useRef(null),
     markers = useRef(null),
+    refit = useRef(null),
     change = useRef(onChange);
   change.current = onChange;
   useEffect(() => {
     const m = L.map(element.current, {
       worldCopyJump: true,
-      minZoom: 2,
+      minZoom: actual ? -2 : 2,
+      zoomSnap: 0.5,
       maxZoom: 18,
       scrollWheelZoom: interactive,
       dragging: interactive,
@@ -48,6 +50,8 @@ export default function Map({
       zoomControl: interactive,
     }).setView(value ? [value.lat, value.lng] : [23, 10], value ? 7 : zoom);
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      minZoom: -2,
+      minNativeZoom: 0,
       maxZoom: 19,
       attribution:
         '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>',
@@ -60,7 +64,10 @@ export default function Map({
     });
     map.current = m;
     markers.current = layers;
-    const observer = new ResizeObserver(() => m.invalidateSize());
+    const observer = new ResizeObserver(() => {
+      m.invalidateSize();
+      refit.current?.();
+    });
     observer.observe(element.current);
     return () => {
       observer.disconnect();
@@ -71,6 +78,18 @@ export default function Map({
     const layers = markers.current,
       m = map.current;
     if (!layers || !m) return;
+    m.setMinZoom(actual ? -2 : 2);
+    refit.current = null;
+    const fit = (points) => {
+      refit.current = () =>
+        m.fitBounds(points, {
+          paddingTopLeft: [30, 48],
+          paddingBottomRight: [30, 24],
+          maxZoom: 12,
+          animate: false,
+        });
+      refit.current();
+    };
     layers.clearLayers();
     if (guesses && actual) {
       const points = [[actual.lat, actual.lng]];
@@ -102,7 +121,7 @@ export default function Map({
           layers,
         );
       });
-      m.fitBounds(points, { padding: [40, 40], maxZoom: 12 });
+      fit(points);
       return;
     }
     if (value)
@@ -125,13 +144,10 @@ export default function Map({
           ],
           { color: '#c87844', weight: 2, dashArray: '7 7' },
         ).addTo(layers);
-        m.fitBounds(
-          [
-            [value.lat, value.lng],
-            [actual.lat, lng],
-          ],
-          { padding: [45, 45], maxZoom: 12 },
-        );
+        fit([
+          [value.lat, value.lng],
+          [actual.lat, lng],
+        ]);
       } else m.setView([actual.lat, lng], 7);
     } else if (value && !m.getBounds().contains([value.lat, value.lng]))
       m.panTo([value.lat, value.lng]);

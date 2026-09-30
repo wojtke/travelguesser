@@ -78,8 +78,23 @@ export function photoOrder(game, shuffled = game.settings?.shufflePhotos) {
     }
   return order;
 }
+// Keep each playthrough on the photos and rules it started with. The first edit
+// also saves a fallback for runs created before snapshots were introduced.
+export function tripSnapshot(game) {
+  return {
+    title: game.title || '',
+    hostName: game.hostName || '',
+    photos: game.photos,
+    settings: gameSettings(game.settings),
+    tripRevision: game.tripRevision || 0,
+  };
+}
+export function runGame(game, run) {
+  return run ? { ...game, ...(run.tripSnapshot || game.originalTrip || {}) } : game;
+}
 export function newRun(game, name, now = Date.now()) {
   return {
+    tripSnapshot: tripSnapshot(game),
     ...(game.id === DEMO_ID ? { demoExpiresAt: new Date(now + DEMO_RETENTION_MS) } : {}),
     name,
     publicId: randomBytes(12).toString('base64url'),
@@ -93,6 +108,7 @@ export function newRun(game, name, now = Date.now()) {
   };
 }
 export function roundDeadline(game, run) {
+  game = runGame(game, run);
   return game.settings?.timeLimitSeconds && run.roundStartedAt
     ? run.roundStartedAt + game.settings.timeLimitSeconds * 1000
     : null;
@@ -104,6 +120,7 @@ export function beginRound(run, round, now = Date.now()) {
   return !run.completed && run.roundStartedAt === null ? { ...run, roundStartedAt: now } : run;
 }
 export function applyGuess(game, run, input, now = Date.now()) {
+  game = runGame(game, run);
   if (!Number.isInteger(input.round) || input.round < 0 || input.round >= game.photos.length) {
     throw new HttpError(400, 'Invalid round.');
   }
@@ -147,6 +164,7 @@ export function applyGuess(game, run, input, now = Date.now()) {
 
 export function publicGame(game) {
   return {
+    tripRevision: game.tripRevision || 0,
     id: game.id,
     title: game.title,
     hostName: game.hostName,

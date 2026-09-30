@@ -17,9 +17,15 @@ import { api, preparePhoto, copyLink } from './api';
 import Map from './Map';
 import LocationSearch from './LocationSearch';
 import CoordinateFields from './CoordinateFields';
+import Modal from './Modal';
 import GameSettings, { defaultSettings } from './GameSettings';
 import { readPhotoLocation } from './photo-location';
-export default function CreateTrip({ user, navigate, notify, signIn }) {
+export default function CreateTrip({ id, user, navigate, notify, signIn }) {
+  const editing = !!id;
+  const [leaving, setLeaving] = useState(null);
+  const allowLeave = useRef(false);
+  const [existing, setExisting] = useState(null),
+    [loading, setLoading] = useState(editing);
   const [photos, setPhotos] = useState([]),
     [selected, setSelected] = useState(0),
     [title, setTitle] = useState(''),
@@ -31,7 +37,7 @@ export default function CreateTrip({ user, navigate, notify, signIn }) {
     [drag, setDrag] = useState(false);
   const [usage, setUsage] = useState(null),
     [settings, setSettings] = useState(defaultSettings);
-  const [autoTitle, setAutoTitle] = useState(true),
+  const [autoTitle, setAutoTitle] = useState(!editing),
     [attempted, setAttempted] = useState(false),
     [validation, setValidation] = useState([]);
   useEffect(() => {
@@ -45,13 +51,53 @@ export default function CreateTrip({ user, navigate, notify, signIn }) {
       .then(setUsage)
       .catch((e) => setError(e.message));
   }, []);
+  useEffect(() => {
+    if (!editing) return;
+    let active = true;
+    api(`/games/${id}/edit`)
+      .then((game) => {
+        if (!active) return;
+        setExisting(game);
+        setTitle(game.title);
+        setHostName(game.hostName);
+        setSettings(game.settings);
+        setPhotos(
+          game.photos.map((p) => ({ ...p, id: p.key, location: { lat: p.lat, lng: p.lng } })),
+        );
+      })
+      .catch((e) => {
+        if (active) setError(e.message);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [id]);
   const input = useRef(null),
     photoRef = useRef(photos);
   photoRef.current = photos;
-  useEffect(() => () => photoRef.current.forEach((p) => URL.revokeObjectURL(p.url)), []);
+  useEffect(
+    () => () =>
+      photoRef.current.forEach((p) => {
+        if (p.file) URL.revokeObjectURL(p.url);
+      }),
+    [],
+  );
   const current = photos[selected];
   const update = (changes) =>
     setPhotos((list) => list.map((p, i) => (i === selected ? { ...p, ...changes } : p)));
+  function movePhoto(offset) {
+    const target = selected + offset;
+    if (target < 0 || target >= photos.length) return;
+    setPhotos((list) => {
+      const next = [...list];
+      [next[selected], next[target]] = [next[target], next[selected]];
+      return next;
+    });
+    setSelected(target);
+  }
   async function addFiles(files) {
     if (preparing) return;
     setPreparing(true);
@@ -125,6 +171,7 @@ export default function CreateTrip({ user, navigate, notify, signIn }) {
     setBusy(true);
     setError('');
     const form = new FormData();
+    let uploadIndex = 0;
     form.append(
       'metadata',
       JSON.stringify({
@@ -132,13 +179,23 @@ export default function CreateTrip({ user, navigate, notify, signIn }) {
         autoTitle,
         hostName,
         settings,
-        photos: photos.map((p) => ({ ...p.location, caption: p.caption })),
+        ...(editing ? { tripRevision: existing.tripRevision } : {}),
+        photos: photos.map((p) => ({
+          ...p.location,
+          caption: p.caption,
+          ...(editing ? (p.key ? { key: p.key } : { uploadIndex: uploadIndex++ }) : {}),
+        })),
       }),
     );
-    photos.forEach((p) => form.append('photos', p.file, 'photo.jpg'));
+    photos.forEach((p) => {
+      if (p.file) form.append('photos', p.file, 'photo.jpg');
+    });
     try {
-      const game = await api('/games', { method: 'POST', body: form });
-      if (game.liveId) navigate(`/g/${game.id}/live/${game.liveId}`);
+      const game = await api(editing ? `/games/${id}` : '/games', {
+        method: editing ? 'PATCH' : 'POST',
+        body: form,
+      });
+      if (!editing && game.liveId) navigate(`/g/${game.id}/live/${game.liveId}`);
       else setCreated(game);
     } catch (e) {
       setError(e.message);
@@ -167,16 +224,64 @@ export default function CreateTrip({ user, navigate, notify, signIn }) {
     );
   }, [photos, title, hostName, settings, attempted]);
   const missing = photos.filter((p) => !p.location).length;
+  const dirty =
+    editing &&
+    existing &&
+    !created &&
+    (title !== existing.title ||
+      hostName !== existing.hostName ||
+      JSON.stringify(settings) !== JSON.stringify(existing.settings) ||
+      JSON.stringify(photos.map((p) => [p.key, p.location?.lat, p.location?.lng, p.caption])) !==
+        JSON.stringify(existing.photos.map((p) => [p.key, p.lat, p.lng, p.caption])));
+  useEffect(() => {
+    if (!dirty) return;
+    const beforeUnload = (e) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    const beforeNavigate = (e) => {
+      if (!allowLeave.current) {
+        e.preventDefault();
+        setLeaving(e.detail);
+      }
+    };
+    window.addEventListener('beforeunload', beforeUnload);
+    window.addEventListener('tripguessr:navigate', beforeNavigate);
+    return () => {
+      window.removeEventListener('beforeunload', beforeUnload);
+      window.removeEventListener('tripguessr:navigate', beforeNavigate);
+    };
+  }, [dirty]);
+  if (loading)
+    return (
+      <main className="loading-page">
+        <LoaderCircle className="spin" /> Loading your trip…
+      </main>
+    );
+  if (editing && !existing)
+    return (
+      <main className="narrow-page">
+        <h1>Unable to edit this trip</h1>
+        <p role="alert">{error}</p>
+        <button className="button outline" onClick={() => navigate('/')}>
+          Back to my trips
+        </button>
+      </main>
+    );
   if (created)
     return (
       <main className="narrow-page created-page">
         <span className="success-icon">
           <Check size={35} />
         </span>
-        <h1>Trip created</h1>
+        <h1>{editing ? 'Changes saved' : 'Trip created'}</h1>
         <p>
-          “{created.title}” has {created.rounds} {created.rounds === 1 ? 'photo' : 'photos'}. Share
-          the link so friends can play.
+          “{created.title}” has {created.rounds} {created.rounds === 1 ? 'photo' : 'photos'}.
+          {created.sharing
+            ? ' Share the link so friends can play.'
+            : ' Link sharing is paused. Enable it in My trips when you are ready for friends to play.'}
+          {editing &&
+            ' The trip link stays the same. Existing games keep their original photos and rules.'}
         </p>
         <div className="share-box">
           <input
@@ -209,14 +314,36 @@ export default function CreateTrip({ user, navigate, notify, signIn }) {
       </button>
       <div className="page-heading">
         <div>
-          <h1>Create a trip</h1>
-          <p>Upload photos and confirm where each one was taken.</p>
+          <h1>{editing ? 'Edit trip' : 'Create a trip'}</h1>
+          <p>
+            {editing
+              ? 'Update photos, locations and game options. Your trip link stays the same.'
+              : 'Upload photos and confirm where each one was taken.'}
+          </p>
         </div>
         <span className="page-badge">
           <Camera size={17} /> 1–12 photos per trip
         </span>
       </div>
-      {usage && (
+      {editing && (
+        <div className="edit-notice panel">
+          <p>
+            Changes apply to new games. Players already playing and completed results keep their
+            original photos and rules.
+          </p>
+          {existing.hasPublicEdition && (
+            <p>
+              Your public edition stays unchanged, including its leaderboard. These edits update the
+              link-only trip.
+            </p>
+          )}
+          <small>
+            Photo storage: {(existing.storageBytes / 1024 / 1024).toFixed(1)} / 24 MB. Earlier
+            photos are kept for existing games and count toward this limit.
+          </small>
+        </div>
+      )}
+      {!editing && usage && (
         <p
           className={`creator-quota ${usage.trips >= usage.limits.activeTrips ? 'error' : ''}`}
           role="status"
@@ -228,284 +355,331 @@ export default function CreateTrip({ user, navigate, notify, signIn }) {
         </p>
       )}
       <form onSubmit={publish} noValidate>
-        {validation.length > 0 && (
-          <div className="error validation-summary" role="alert">
-            <strong>Finish these details to create your trip:</strong>
-            <ul>
-              {validation.map((v) => (
-                <li key={v}>{v}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-        <div className="upload-heading">
-          <div>
-            <span className="section-number">01</span>
-            <h2>Upload photos</h2>
-          </div>
-          <span>{photos.length} / 12 photos</span>
-        </div>
-        <input
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          multiple
-          ref={input}
-          className="sr-only"
-          aria-label="Upload travel photos"
-          onChange={(e) => {
-            addFiles(e.target.files);
-            e.target.value = '';
-          }}
-        />
-        {!photos.length ? (
-          <button
-            type="button"
-            className={`dropzone ${drag ? 'dragging' : ''}`}
-            onClick={() => input.current.click()}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDrag(true);
-            }}
-            onDragLeave={() => setDrag(false)}
-            onDrop={(e) => {
-              e.preventDefault();
-              setDrag(false);
-              addFiles(e.dataTransfer.files);
-            }}
-            disabled={preparing}
-          >
-            <span className="drop-icon">
-              {preparing ? (
-                <LoaderCircle className="spin" size={30} />
-              ) : (
-                <ImagePlus size={30} strokeWidth={1.5} />
-              )}
-            </span>
-            <h3>{preparing ? 'Processing photos…' : 'Add photos'}</h3>
-            <p>
-              Drag photos here, or <span>browse your files</span>
-            </p>
-            <small>JPG, PNG or WebP · Up to 25 MB each · GPS detected automatically</small>
-          </button>
-        ) : (
-          <div className="photo-workspace panel">
-            <div className="photo-rail">
-              {photos.map((p, i) => (
-                <button
-                  type="button"
-                  key={p.id}
-                  className={`photo-thumb ${selected === i ? 'selected' : ''} ${attempted && !p.location ? 'needs-location' : ''}`}
-                  onClick={() => setSelected(i)}
-                  aria-label={`Edit photo ${i + 1}${p.location ? ', location set' : ', needs a location'}`}
-                >
-                  <img src={p.url} alt={`Trip photo ${i + 1}`} />
-                  <span className="thumb-number">{i + 1}</span>
-                  <span className={`thumb-status ${p.location ? 'set' : ''}`}>
-                    {p.location ? <Check size={11} /> : <MapPin size={11} />}
-                  </span>
-                </button>
-              ))}
-              {photos.length < 12 && (
-                <button
-                  type="button"
-                  className="add-photo"
-                  onClick={() => input.current.click()}
-                  disabled={preparing}
-                  aria-label="Add more photos"
-                >
-                  {preparing ? <LoaderCircle className="spin" size={23} /> : <Plus size={23} />}
-                  <span>Add photos</span>
-                </button>
-              )}
+        <fieldset className="trip-form-fields" disabled={busy}>
+          {validation.length > 0 && (
+            <div className="error validation-summary" role="alert">
+              <strong>Finish these details to {editing ? 'save' : 'create'} your trip:</strong>
+              <ul>
+                {validation.map((v) => (
+                  <li key={v}>{v}</li>
+                ))}
+              </ul>
             </div>
-            {current && (
-              <div className="photo-editor">
-                <div className="photo-preview">
-                  <img src={current.url} alt={`Selected trip photo ${selected + 1}`} />
+          )}
+          <div className="upload-heading">
+            <div>
+              <span className="section-number">01</span>
+              <h2>Upload photos</h2>
+            </div>
+            <span>{photos.length} / 12 photos</span>
+          </div>
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            multiple
+            ref={input}
+            className="sr-only"
+            aria-label="Upload travel photos"
+            onChange={(e) => {
+              addFiles(e.target.files);
+              e.target.value = '';
+            }}
+          />
+          {!photos.length ? (
+            <button
+              type="button"
+              className={`dropzone ${drag ? 'dragging' : ''}`}
+              onClick={() => input.current.click()}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDrag(true);
+              }}
+              onDragLeave={() => setDrag(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDrag(false);
+                addFiles(e.dataTransfer.files);
+              }}
+              disabled={preparing}
+            >
+              <span className="drop-icon">
+                {preparing ? (
+                  <LoaderCircle className="spin" size={30} />
+                ) : (
+                  <ImagePlus size={30} strokeWidth={1.5} />
+                )}
+              </span>
+              <h3>{preparing ? 'Processing photos…' : 'Add photos'}</h3>
+              <p>
+                Drag photos here, or <span>browse your files</span>
+              </p>
+              <small>JPG, PNG or WebP · Up to 25 MB each · GPS detected automatically</small>
+            </button>
+          ) : (
+            <div className="photo-workspace panel">
+              <div className="photo-rail">
+                {photos.map((p, i) => (
                   <button
                     type="button"
-                    className="remove-photo"
-                    onClick={() => {
-                      URL.revokeObjectURL(current.url);
-                      setPhotos((p) => p.filter((_, i) => i !== selected));
-                      setSelected((s) => Math.max(0, s - 1));
-                    }}
+                    key={p.id}
+                    className={`photo-thumb ${selected === i ? 'selected' : ''} ${attempted && !p.location ? 'needs-location' : ''}`}
+                    onClick={() => setSelected(i)}
+                    aria-label={`Edit photo ${i + 1}${p.location ? ', location set' : ', needs a location'}`}
                   >
-                    <Trash2 size={15} /> Remove
+                    <img src={p.url} alt={`Trip photo ${i + 1}`} />
+                    <span className="thumb-number">{i + 1}</span>
+                    <span className={`thumb-status ${p.location ? 'set' : ''}`}>
+                      {p.location ? <Check size={11} /> : <MapPin size={11} />}
+                    </span>
                   </button>
-                  <span className="preview-number">
-                    PHOTO {String(selected + 1).padStart(2, '0')}
-                  </span>
-                </div>
-                <div
-                  className={`location-editor ${attempted && !current.location ? 'field-error' : ''}`}
-                  tabIndex={-1}
-                >
-                  <div className="photo-navigation">
-                    <button
-                      type="button"
-                      className="button outline small"
-                      disabled={selected === 0}
-                      onClick={() => setSelected((i) => i - 1)}
-                    >
-                      ← Previous
-                    </button>
-                    <span>
-                      Photo {selected + 1} of {photos.length}
-                    </span>
-                    <button
-                      type="button"
-                      className="button outline small"
-                      disabled={selected === photos.length - 1}
-                      onClick={() => setSelected((i) => i + 1)}
-                    >
-                      Next →
-                    </button>
-                  </div>
-                  <div className="location-title">
-                    <div>
-                      <h3>
-                        {current.location
-                          ? current.gps
-                            ? 'Location found automatically'
-                            : 'Location set'
-                          : current.gpsStatus === 'unreadable'
-                            ? 'Couldn’t read the photo’s GPS'
-                            : 'No GPS location in this photo'}
-                      </h3>
-                      <p>
-                        {current.location
-                          ? current.gps
-                            ? 'The photo’s GPS placed this pin. You can publish without changing it.'
-                            : 'Pin placed. You can move it with another click.'
-                          : current.gpsStatus === 'unreadable'
-                            ? 'Try the original camera file, search for the place, or set a pin on the map.'
-                            : 'This file has no saved GPS coordinates. Search for the place below, choose a geotagged original, or place a pin.'}
-                      </p>
-                    </div>
-                    <span className={`location-status ${current.location ? 'set' : ''}`}>
-                      {current.location ? <Check size={17} /> : <MapPin size={17} />}
-                    </span>
-                  </div>
-                  <LocationSearch
-                    key={`search-${current.id}`}
-                    onSelect={(place) =>
-                      update({
-                        location: { lat: place.lat, lng: place.lng },
-                        gps: false,
-                        locationFocus: place,
-                      })
-                    }
-                  />
-                  <Map
-                    key={current.id}
-                    value={current.location}
-                    focus={current.locationFocus}
-                    onChange={(location) => update({ location, gps: false })}
-                    className="editor-map"
-                  />
-                  <CoordinateFields
-                    value={current.location}
-                    onChange={(location) => update({ location, gps: false })}
-                  />
-                  <label htmlFor="caption">
-                    Caption <span>(optional)</span>
-                  </label>
-                  <input
-                    id="caption"
-                    placeholder="e.g. Kyoto, Japan"
-                    maxLength={200}
-                    value={current.caption}
-                    onChange={(e) => update({ caption: e.target.value })}
-                  />
-                  <small>Friends see this after they guess.</small>
-                </div>
+                ))}
+                {photos.length < 12 && (
+                  <button
+                    type="button"
+                    className="add-photo"
+                    onClick={() => input.current.click()}
+                    disabled={preparing}
+                    aria-label="Add more photos"
+                  >
+                    {preparing ? <LoaderCircle className="spin" size={23} /> : <Plus size={23} />}
+                    <span>Add photos</span>
+                  </button>
+                )}
               </div>
-            )}
+              {current && (
+                <div className="photo-editor">
+                  <div className="photo-preview">
+                    <img src={current.url} alt={`Selected trip photo ${selected + 1}`} />
+                    <button
+                      type="button"
+                      className="remove-photo"
+                      onClick={() => {
+                        if (current.file) URL.revokeObjectURL(current.url);
+                        setPhotos((p) => p.filter((_, i) => i !== selected));
+                        setSelected((s) => Math.max(0, s - 1));
+                      }}
+                    >
+                      <Trash2 size={15} /> Remove
+                    </button>
+                    <span className="preview-number">
+                      PHOTO {String(selected + 1).padStart(2, '0')}
+                    </span>
+                  </div>
+                  <div
+                    className={`location-editor ${attempted && !current.location ? 'field-error' : ''}`}
+                    tabIndex={-1}
+                  >
+                    <div className="photo-navigation">
+                      <button
+                        type="button"
+                        className="button outline small"
+                        disabled={selected === 0}
+                        onClick={() => setSelected((i) => i - 1)}
+                      >
+                        ← Previous
+                      </button>
+                      <span>
+                        Photo {selected + 1} of {photos.length}
+                      </span>
+                      <button
+                        type="button"
+                        className="button outline small"
+                        disabled={selected === photos.length - 1}
+                        onClick={() => setSelected((i) => i + 1)}
+                      >
+                        Next →
+                      </button>
+                    </div>
+                    {editing && photos.length > 1 && (
+                      <div className="photo-order-actions">
+                        <span>Photo order</span>
+                        <button
+                          type="button"
+                          className="text-button"
+                          disabled={selected === 0}
+                          onClick={() => movePhoto(-1)}
+                        >
+                          Move earlier
+                        </button>
+                        <button
+                          type="button"
+                          className="text-button"
+                          disabled={selected === photos.length - 1}
+                          onClick={() => movePhoto(1)}
+                        >
+                          Move later
+                        </button>
+                      </div>
+                    )}
+                    <div className="location-title">
+                      <div>
+                        <h3>
+                          {current.location
+                            ? current.gps
+                              ? 'Location found automatically'
+                              : 'Location set'
+                            : current.gpsStatus === 'unreadable'
+                              ? 'Couldn’t read the photo’s GPS'
+                              : 'No GPS location in this photo'}
+                        </h3>
+                        <p>
+                          {current.location
+                            ? current.gps
+                              ? 'The photo’s GPS placed this pin. You can publish without changing it.'
+                              : 'Pin placed. You can move it with another click.'
+                            : current.gpsStatus === 'unreadable'
+                              ? 'Try the original camera file, search for the place, or set a pin on the map.'
+                              : 'This file has no saved GPS coordinates. Search for the place below, choose a geotagged original, or place a pin.'}
+                        </p>
+                      </div>
+                      <span className={`location-status ${current.location ? 'set' : ''}`}>
+                        {current.location ? <Check size={17} /> : <MapPin size={17} />}
+                      </span>
+                    </div>
+                    <LocationSearch
+                      key={`search-${current.id}`}
+                      onSelect={(place) =>
+                        update({
+                          location: { lat: place.lat, lng: place.lng },
+                          gps: false,
+                          locationFocus: place,
+                        })
+                      }
+                    />
+                    <Map
+                      key={current.id}
+                      value={current.location}
+                      focus={current.locationFocus}
+                      onChange={(location) => update({ location, gps: false })}
+                      className="editor-map"
+                    />
+                    <CoordinateFields
+                      value={current.location}
+                      onChange={(location) => update({ location, gps: false })}
+                    />
+                    <label htmlFor="caption">
+                      Caption <span>(optional)</span>
+                    </label>
+                    <input
+                      id="caption"
+                      placeholder="e.g. Kyoto, Japan"
+                      maxLength={200}
+                      value={current.caption}
+                      onChange={(e) => update({ caption: e.target.value })}
+                    />
+                    <small>Friends see this after they guess.</small>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          <div className="trip-details panel">
+            <div className="section-number">02</div>
+            <div className="field">
+              <label htmlFor="title">Trip name</label>
+              <input
+                id="title"
+                placeholder="e.g. Japan 2026"
+                value={title}
+                onChange={(e) => {
+                  setAutoTitle(false);
+                  setTitle(e.target.value);
+                }}
+                aria-invalid={attempted && !title.trim()}
+                required
+                maxLength={80}
+              />
+            </div>
+            <div className="field host-name">
+              <label htmlFor="name">Your name</label>
+              <input
+                id="name"
+                placeholder="Your display name"
+                value={hostName}
+                onChange={(e) => setHostName(e.target.value)}
+                aria-invalid={attempted && !hostName.trim()}
+                required
+                maxLength={30}
+              />
+            </div>
           </div>
-        )}
-        <div className="trip-details panel">
-          <div className="section-number">02</div>
-          <div className="field">
-            <label htmlFor="title">Trip name</label>
-            <input
-              id="title"
-              placeholder="e.g. Japan 2026"
-              value={title}
-              onChange={(e) => {
-                setAutoTitle(false);
-                setTitle(e.target.value);
-              }}
-              aria-invalid={attempted && !title.trim()}
-              required
-              maxLength={80}
-            />
-          </div>
-          <div className="field host-name">
-            <label htmlFor="name">Your name</label>
-            <input
-              id="name"
-              placeholder="Your display name"
-              value={hostName}
-              onChange={(e) => setHostName(e.target.value)}
-              aria-invalid={attempted && !hostName.trim()}
-              required
-              maxLength={30}
-            />
-          </div>
-        </div>
-        <GameSettings value={settings} onChange={setSettings} />
-        <p className="privacy-note">
-          Trips are link-only by default. Anyone with the link can play and forward it. You can
-          publish a separate public edition, pause sharing or delete the trip from My trips. Upload
-          only photos you have permission to share, and avoid sensitive locations. By creating a
-          trip, you agree to the{' '}
-          <a href="/terms" target="_blank" rel="noreferrer">
-            Terms
-          </a>
-          . See our{' '}
-          <a href="/privacy" target="_blank" rel="noreferrer">
-            Privacy notice
-          </a>
-          .
-        </p>
-        {error && (
-          <p className="error" role="alert">
-            {error}
+          <GameSettings value={settings} onChange={setSettings} />
+          <p className="privacy-note">
+            Trips are link-only by default. Anyone with the link can play and forward it. You can
+            publish a separate public edition, pause sharing or delete the trip from My trips.
+            Upload only photos you have permission to share, and avoid sensitive locations. By
+            creating a trip, you agree to the{' '}
+            <a href="/terms" target="_blank" rel="noreferrer">
+              Terms
+            </a>
+            . See our{' '}
+            <a href="/privacy" target="_blank" rel="noreferrer">
+              Privacy notice
+            </a>
+            .
           </p>
-        )}
-        <div className="publish-bar">
-          <div>
-            <LockKeyhole size={18} />
-            <span>
-              Locations stay secret until each guess.
-              <br />
-              <small>We remove location metadata from shared photos.</small>
-            </span>
+          {error && (
+            <p className="error" role="alert">
+              {error}
+            </p>
+          )}
+          <div className="publish-bar">
+            <div>
+              <LockKeyhole size={18} />
+              <span>
+                Locations stay secret until each guess.
+                <br />
+                <small>We remove location metadata from shared photos.</small>
+              </span>
+            </div>
+            <button
+              className="button"
+              disabled={
+                busy ||
+                preparing ||
+                (!editing && (!usage || usage.trips >= usage.limits.activeTrips))
+              }
+            >
+              {busy ? (
+                <>
+                  <LoaderCircle className="spin" size={18} />{' '}
+                  {editing ? 'Saving changes…' : 'Publishing your trip…'}
+                </>
+              ) : (
+                <>
+                  {editing ? 'Save changes' : 'Create & share trip'} <ArrowRight size={18} />
+                </>
+              )}
+            </button>
           </div>
-          <button
-            className="button"
-            disabled={busy || preparing || !usage || usage.trips >= usage.limits.activeTrips}
-          >
-            {busy ? (
-              <>
-                <LoaderCircle className="spin" size={18} /> Publishing your trip…
-              </>
-            ) : (
-              <>
-                Create & share trip <ArrowRight size={18} />
-              </>
-            )}
-          </button>
-        </div>
-        {missing > 0 && (
-          <p className="missing-note">
-            {missing} {missing === 1 ? 'photo has' : 'photos have'} no detected GPS location. Set{' '}
-            {missing === 1 ? 'its location' : 'their locations'} or choose geotagged photos to
-            publish.
-          </p>
-        )}
+          {missing > 0 && (
+            <p className="missing-note">
+              {missing} {missing === 1 ? 'photo has' : 'photos have'} no detected GPS location. Set{' '}
+              {missing === 1 ? 'its location' : 'their locations'} or choose geotagged photos to
+              publish.
+            </p>
+          )}
+        </fieldset>
       </form>
+      {leaving && (
+        <Modal title="Discard unsaved changes?" close={() => setLeaving(null)}>
+          <p>Your saved trip has not changed. Leave this editor without saving?</p>
+          <div className="modal-actions">
+            <button className="button outline" onClick={() => setLeaving(null)}>
+              Keep editing
+            </button>
+            <button
+              className="button"
+              onClick={() => {
+                allowLeave.current = true;
+                navigate(leaving);
+              }}
+            >
+              Discard changes
+            </button>
+          </div>
+        </Modal>
+      )}
     </main>
   );
 }

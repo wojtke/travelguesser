@@ -15,6 +15,7 @@ export function resultSummary(run) {
   const rounds = (run.results || []).map((r, i) => roundSummary(r, i, run.order));
   return {
     id: run.publicId || null,
+    tripRevision: run.tripSnapshot?.tripRevision || 0,
     name: run.name,
     score: run.score,
     finishedAt: run.finishedAt ?? null,
@@ -29,7 +30,7 @@ export function shareSnapshot(game, playerId, source, run, now = Date.now()) {
   if (!run?.completed) throw new HttpError(409, 'Finish the game before sharing your results.');
   return {
     gameId: game.id,
-    title: game.title,
+    title: run.tripSnapshot?.title || game.originalTrip?.title || game.title,
     source,
     ownerPlayerId: playerId,
     ...resultSummary(run),

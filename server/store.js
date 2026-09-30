@@ -69,6 +69,18 @@ export class LocalStore {
       return (d.games[id] = fn(game));
     });
   }
+  async mutateOwnedGame(id, uid, fn) {
+    return this.mutate((d) => {
+      const game = visible(d.games[id]);
+      if (!game) throw new HttpError(404, 'This trip is no longer available.');
+      checkOwner(game, uid);
+      const next = fn(game);
+      d.games[id] = next;
+      const slot = d.creators?.[uid]?.trips[id];
+      if (slot) slot.bytes = next.storageBytes || 0;
+      return next;
+    });
+  }
   async startRound(game, playerId, round) {
     return this.mutate(
       (d) =>
@@ -122,7 +134,7 @@ export class LocalStore {
       if (gameId !== 'demo-trip' && !visible(d.games[gameId]))
         throw new HttpError(404, 'This trip is no longer available.');
       const key = `${gameId}:${playerId}`;
-      return (d.runs[key] ||= newRun(game || d.games[gameId], name));
+      return (d.runs[key] ||= newRun(d.games[gameId] || game, name));
     });
   }
   async getRun(gameId, playerId) {
@@ -134,14 +146,19 @@ export class LocalStore {
         throw new HttpError(404, 'This trip is no longer available.');
       const key = `${game.id}:${playerId}`;
       if (!d.runs[key]) throw new HttpError(403, 'Join this game first.');
-      const updated = applyGuess(game, d.runs[key], input);
+      const updated = applyGuess(d.games[game.id] || game, d.runs[key], input);
       d.runs[key] = updated.run;
       return updated;
     });
   }
-  async leaderboard(gameId) {
+  async leaderboard(gameId, revision) {
     return Object.values((await this.read()).runs)
-      .filter((r) => r.gameId === gameId && r.completed)
+      .filter(
+        (r) =>
+          r.gameId === gameId &&
+          r.completed &&
+          (revision === undefined || (r.tripSnapshot?.tripRevision || 0) === revision),
+      )
       .sort((a, b) => b.score - a.score || a.finishedAt - b.finishedAt)
       .slice(0, 20)
       .map(resultSummary);
@@ -182,6 +199,9 @@ export class LocalStore {
   async getPhoto(gameId, name) {
     return fs.readFile(path.join(this.directory, 'photos', gameId, name));
   }
+  async deletePhoto(gameId, name) {
+    await fs.rm(path.join(this.directory, 'photos', gameId, name), { force: true });
+  }
 }
 
 export class CloudStore {
@@ -213,6 +233,26 @@ export class CloudStore {
       const updated = fn(game);
       if (updated !== game) t.set(ref, updated);
       return updated;
+    });
+  }
+  async mutateOwnedGame(id, uid, fn) {
+    return this.db.runTransaction(async (t) => {
+      const ref = this.gameRef(id),
+        creatorRef = this.creatorRef(uid);
+      const [g, c] = await Promise.all([t.get(ref), t.get(creatorRef)]);
+      const game = visible(g.data());
+      if (!game) throw new HttpError(404, 'This trip is no longer available.');
+      checkOwner(game, uid);
+      const next = fn(game),
+        creator = c.data();
+      if (next !== game) {
+        t.set(ref, next);
+        if (creator?.trips[id]) {
+          creator.trips[id].bytes = next.storageBytes || 0;
+          t.set(creatorRef, creator);
+        }
+      }
+      return next;
     });
   }
   async startRound(game, playerId, round) {
@@ -276,8 +316,10 @@ export class CloudStore {
   async join(gameId, playerId, name, game) {
     const ref = this.runRef(gameId, playerId);
     return this.db.runTransaction(async (t) => {
-      if (gameId !== 'demo-trip' && !visible((await t.get(this.gameRef(gameId))).data()))
-        throw new HttpError(404, 'This trip is no longer available.');
+      if (gameId !== 'demo-trip') {
+        game = visible((await t.get(this.gameRef(gameId))).data());
+        if (!game) throw new HttpError(404, 'This trip is no longer available.');
+      }
       const old = await t.get(ref);
       const previous = retainedRun(gameId, old.data());
       if (previous) return previous;
@@ -294,8 +336,10 @@ export class CloudStore {
   }
   async guess(game, playerId, input) {
     return this.db.runTransaction(async (t) => {
-      if (game.id !== 'demo-trip' && !visible((await t.get(this.gameRef(game.id))).data()))
-        throw new HttpError(404, 'This trip is no longer available.');
+      if (game.id !== 'demo-trip') {
+        game = visible((await t.get(this.gameRef(game.id))).data());
+        if (!game) throw new HttpError(404, 'This trip is no longer available.');
+      }
       const ref = this.runRef(game.id, playerId);
       const s = await t.get(ref);
       if (!retainedRun(game.id, s.data())) throw new HttpError(403, 'Join this game first.');
@@ -311,7 +355,7 @@ export class CloudStore {
       return updated;
     });
   }
-  async leaderboard(gameId) {
+  async leaderboard(gameId, revision) {
     const query = this.gameRef(gameId).collection('leaderboard').orderBy('score', 'desc');
     // TTL removal is asynchronous. Hide expired scores immediately and scan a
     // bounded number of candidates, avoiding an unbounded read on public requests.
@@ -323,9 +367,13 @@ export class CloudStore {
       scanned += page.size;
       for (const doc of page.docs) {
         const row = doc.data();
-        if (retainedRun(gameId, row))
+        if (
+          retainedRun(gameId, row) &&
+          (revision === undefined || (row.tripRevision || 0) === revision)
+        )
           rows.push({
             id: row.id ?? null,
+            tripRevision: row.tripRevision || 0,
             name: row.name,
             score: row.score,
             finishedAt: row.finishedAt,
@@ -334,7 +382,12 @@ export class CloudStore {
           });
       }
       cursor = page.size === 20 ? page.docs.at(-1) : null;
-    } while (gameId === DEMO_ID && cursor && rows.length < 20 && scanned < 100);
+    } while (
+      (gameId === DEMO_ID || revision !== undefined) &&
+      cursor &&
+      rows.length < 20 &&
+      scanned < 100
+    );
     return rows.slice(0, 20);
   }
   async deleteGame(id, uid) {
@@ -375,6 +428,9 @@ export class CloudStore {
   async getPhoto(gameId, name) {
     const [buffer] = await this.bucket.file(`games/${gameId}/${name}`).download();
     return buffer;
+  }
+  async deletePhoto(gameId, name) {
+    await this.bucket.file(`games/${gameId}/${name}`).delete({ ignoreNotFound: true });
   }
 }
 

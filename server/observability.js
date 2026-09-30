@@ -43,6 +43,9 @@ const actions = new Set([
 export function routeName(path) {
   if (exactRoutes.has(path)) return path;
   if (/^\/g\/[^/]+\/results\/[^/]+\/?$/.test(path)) return '/g/:trip/results/:result';
+  if (/^\/g\/[a-zA-Z0-9_-]{8,40}\/edit\/?$/.test(path)) return '/g/:trip/edit';
+  if (/^\/api\/games\/[^/]+\/edit(?:\/photos\/[^/]+)?\/?$/.test(path))
+    return '/api/games/:trip/edit';
   if (/^\/api\/games\/[^/]+\/results\/[^/]+\/?$/.test(path))
     return '/api/games/:trip/results/:result';
   if (/^\/p\/[\w-]+(?:\/(?:play|live\/[\w-]+|results\/[\w-]+))?\/?$/.test(path))
@@ -102,6 +105,7 @@ export function isAppPage(path) {
     '/terms',
     '/cookies',
     '/g/:trip',
+    '/g/:trip/edit',
     '/g/:trip/live/:lobby',
     '/g/:trip/results/:result',
   ].includes(routeName(path));

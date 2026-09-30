@@ -187,7 +187,7 @@ export function PublicTrip({ id, navigate, notify, user, signIn }) {
         </span>
         <h1>{game.title}</h1>
         <p>
-          {game.rounds} photos ·{' '}
+          {game.rounds} {game.rounds === 1 ? 'photo' : 'photos'} ·{' '}
           {game.settings.timeLimitSeconds
             ? `${game.settings.timeLimitSeconds} seconds per photo`
             : 'No time limit'}
@@ -210,6 +210,7 @@ export function PublicTrip({ id, navigate, notify, user, signIn }) {
           results stay within that room.
         </p>
         <a
+          className="report-trip-link"
           href={`/contact?target=${encodeURIComponent(`/p/${id}`)}`}
           onClick={(e) => {
             e.preventDefault();

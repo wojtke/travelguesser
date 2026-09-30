@@ -630,3 +630,147 @@ input[aria-invalid='true'] {
   background: #f1f1ed;
   border-radius: 8px;
 }
+
+/* Results use separate action groups so controls never touch at a wrap point. */
+.results-hero .share-actions {
+  max-width: 640px;
+  margin: 28px auto;
+}
+.share-actions > .small-note {
+  display: block;
+  margin: 16px auto 0;
+  max-width: 62ch;
+  font-size: 12px;
+}
+.result-follow-up {
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+  margin: 28px 0 20px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+.results-hero .result-rank-status {
+  margin: 0;
+  max-width: 60ch;
+  font-size: 13px;
+}
+.result-play-actions {
+  gap: 12px;
+}
+.result-home-link {
+  margin-top: 12px;
+}
+.results-section > h2 {
+  margin: 0 0 20px;
+  font-size: 24px;
+  letter-spacing: -0.6px;
+}
+.round-cards {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 24px;
+}
+.round-card {
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fafaf6;
+}
+.round-card > h3 {
+  margin: 14px 0 8px;
+}
+.round-card-stats,
+.round-card-caption {
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 0 0 12px;
+  overflow-wrap: anywhere;
+}
+.round-card .photo-credit {
+  margin: 0 0 14px;
+}
+.result-mini {
+  margin-top: auto;
+  padding-top: 4px;
+}
+.result-mini > .text-button {
+  margin-top: 8px;
+  min-height: 36px;
+  font-size: 12px;
+}
+.mini-map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: #566355;
+}
+.mini-map-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.mini-map-legend i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.guess-dot {
+  background: #c87844;
+}
+.actual-dot {
+  background: #294b3c;
+}
+.trip-form-fields {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.edit-notice {
+  padding: 18px 22px;
+  margin: 22px 0;
+}
+.edit-notice p {
+  font-size: 13px;
+  margin: 0 0 8px;
+}
+.edit-notice small {
+  color: #677561;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.photo-order-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  font-size: 12px;
+  padding-bottom: 16px;
+}
+.photo-order-actions .text-button {
+  font-size: 12px;
+  min-height: 32px;
+}
+@media (max-width: 520px) {
+  .result-play-actions,
+  .share-actions .center-buttons {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .results-hero .total-score {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: center;
+    gap: 4px 8px;
+  }
+  .round-cards {
+    gap: 18px;
+  }
+}

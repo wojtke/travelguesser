@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { registerLiveRoutes } from './routes/live.js';
 import { registerSoloRoutes } from './routes/solo.js';
+import { registerTripEditingRoutes } from './routes/trip-editing.js';
 import { registerPublicRoutes } from './routes/public.js';
 import { createStore } from './store.js';
 import { cleanText, coordinates, gameSettings, HttpError, publicGame } from './game.js';
@@ -363,6 +364,15 @@ export function createApp({
     }
   });
   registerSoloRoutes(app, { store, requireCsrf, root });
+  registerTripEditingRoutes(app, {
+    store,
+    requireCreator,
+    requireCsrf,
+    uploadLimiter,
+    admitUpload,
+    upload,
+    log,
+  });
   app.patch('/api/games/:gameId/sharing', requireCreator, requireCsrf, async (req, res) => {
     if (typeof req.body?.enabled !== 'boolean')
       throw new HttpError(400, 'Choose whether sharing is enabled.');
