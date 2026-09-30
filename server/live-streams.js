@@ -1,7 +1,11 @@
 import { canViewLive, expireLive, getLive, publicLive } from './live.js';
 import { HttpError } from './game.js';
 import { errorDetails } from './observability.js';
-export function createLiveStreams(store, log = () => {}) {
+export function createLiveStreams(
+  store,
+  log = () => {},
+  { watchKey = (req) => req.game.id, view = publicLive } = {},
+) {
   const rooms = new Map(),
     counts = new Map();
   let total = 0;
@@ -75,7 +79,7 @@ export function createLiveStreams(store, log = () => {}) {
         close();
         return;
       }
-      const data = publicLive(game, actor);
+      const data = view(game, actor);
       if (ownDraft?.round === game.live.round && !data.me?.guess)
         data.draft = { point: ownDraft.point, version: ownDraft.version, round: ownDraft.round };
       if (!res.write(`id: ${data.revision}\ndata: ${JSON.stringify(data)}\n\n`)) {
@@ -89,7 +93,7 @@ export function createLiveStreams(store, log = () => {}) {
       room = { clients: new Set(), latest: null, timer: null };
       rooms.set(key, room);
       room.unsubscribe = store.watchGame(
-        req.game.id,
+        watchKey(req),
         (game) => {
           room.latest = game;
           clearTimeout(room.timer);
@@ -98,10 +102,12 @@ export function createLiveStreams(store, log = () => {}) {
           if (room.clients.size && l?.id === req.params.liveId && game.sharing !== false) {
             const boundary =
               l.phase === 'preparing' ? l.startsAt : l.phase === 'round' ? l.deadline : null;
-            const at = Math.min(boundary || l.expiresAt, l.expiresAt);
+            const expiration =
+              l.phase === 'lobby' && l.idleUntil ? Math.min(l.expiresAt, l.idleUntil) : l.expiresAt;
+            const at = Math.min(boundary || expiration, expiration);
             room.timer = setTimeout(
               async () => {
-                if (at === l.expiresAt) {
+                if (at === expiration) {
                   for (const callback of [...room.clients]) callback(null);
                   return;
                 }

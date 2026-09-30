@@ -267,3 +267,74 @@ test('slow photos do not hold everyone up; first-lock timeout scores a saved pin
     await Promise.all(contexts.map((c) => c.close()));
   }
 });
+
+test('public search, ranked consent, results, replay and withdrawal work end to end', async ({
+  page,
+}) => {
+  const session = await (await page.request.get('/api/session')).json();
+  await page.request.post('/api/auth/session', {
+    headers: { 'X-CSRF-Token': session.csrfToken },
+    data: { idToken: 'local-development' },
+  });
+  await page.goto('/explore');
+  await page.getByLabel('Search titles and tags').fill('test');
+  await page.getByRole('button', { name: 'Search', exact: true }).click();
+  await page.getByRole('link', { name: 'Public browser trip' }).click();
+  await page.getByRole('button', { name: 'Play solo' }).click();
+  const consent = page.getByRole('checkbox', { name: /Count my first attempt/ });
+  await expect(consent).not.toBeChecked();
+  await consent.check();
+  await page.getByLabel('Your name', { exact: true }).fill('Public test player');
+  await page.getByRole('button', { name: 'Start game' }).click();
+  await expect(page.locator('.photo-canvas img')).toBeVisible();
+  await page.locator('.guess-map').click({ position: { x: 100, y: 100 } });
+  await page.getByRole('button', { name: /Confirm guess/ }).click();
+  await page.getByRole('button', { name: 'See results' }).click();
+  await expect(page.locator('.scores-table').first()).toContainText('Public test player');
+  await expect(
+    page.locator('.scores-table').first().locator('tbody tr').first().locator('td').first(),
+  ).toContainText('1');
+  await page.screenshot({
+    path: test.info().outputPath('public-ranked-results.png'),
+    fullPage: true,
+  });
+  await page.getByRole('button', { name: /Remove my public score/ }).click();
+  await expect(page.locator('.scores-table').first()).not.toContainText('Public test player');
+  await page.getByRole('button', { name: /Play again for practice/ }).click();
+  await expect(page.locator('.photo-canvas img')).toBeVisible();
+});
+
+test('a report returns a working private receipt and a public room can be hosted independently', async ({
+  page,
+}) => {
+  const session = await (await page.request.get('/api/session')).json();
+  await page.request.post('/api/auth/session', {
+    headers: { 'X-CSRF-Token': session.csrfToken },
+    data: { idToken: 'local-development' },
+  });
+  const p = (await (await page.request.get('/api/catalog?q=test')).json()).items[0];
+  await page.goto(`/p/${p.id}`);
+  await page.getByRole('button', { name: 'Play with friends' }).click();
+  await page.getByLabel('Your host nickname').fill('Friend host');
+  await page.getByRole('button', { name: 'Create private room' }).click();
+  await expect(page.getByRole('button', { name: 'Start first round' })).toBeVisible();
+  await expect(page.getByRole('radio', { name: /Host only/ })).toBeChecked();
+  await page.goto(`/contact?target=${encodeURIComponent(`/p/${p.id}`)}`);
+  await page.getByLabel('Describe the issue').fill('Synthetic browser test report.');
+  await page.getByRole('checkbox', { name: /This report is accurate/ }).check();
+  await page.getByRole('button', { name: 'Send and get private receipt' }).click();
+  await expect(page.getByRole('heading', { name: 'Private report receipt' })).toBeVisible();
+  await expect(page.locator('.report-thread')).toContainText('Synthetic browser test report.');
+  await page.getByLabel('Reply or request review').fill('Additional test details.');
+  await page.getByRole('button', { name: 'Send reply', exact: true }).click();
+  await expect(page.locator('.report-thread')).toContainText('Additional test details.');
+  const link = await page.getByLabel('Private receipt link').inputValue();
+  expect(link).toContain('#');
+  await page.reload();
+  await expect(page.locator('.report-thread')).toContainText('Additional test details.');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/explore');
+  await expect(page.getByRole('link', { name: 'Public browser trip' })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: test.info().outputPath('mobile-explore.png'), fullPage: true });
+});

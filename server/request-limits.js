@@ -1,6 +1,10 @@
 import { createHmac, randomBytes } from 'node:crypto';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 
+const privateLimiterSecret = randomBytes(32);
+export const privateNetworkKey = (req) =>
+  createHmac('sha256', privateLimiterSecret).update(ipKeyGenerator(req.ip)).digest('hex');
+
 // These counters are per process, not a billing cap. Keep generous network
 // headroom for a full lobby on one Wi-Fi connection (20 polls/min per player).
 export function createRequestLimits({
@@ -37,7 +41,8 @@ export function createRequestLimits({
   const gameplay = (req, res, next) =>
     req.method === 'POST' && /\/live\/[^/]+\/draft$/.test(req.path)
       ? drafts(req, res, next)
-      : /^\/games\/[^/]+\/live\/[^/]+(?:\/[^/]+)?$/.test(req.path) && !req.path.endsWith('/photos')
+      : /^\/(?:games|publications)\/[^/]+\/live\/[^/]+(?:\/[^/]+)?$/.test(req.path) &&
+          !req.path.endsWith('/photos')
         ? live(req, res, next)
         : player(req, res, next);
   return { early: [total, network], gameplay };

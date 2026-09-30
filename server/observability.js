@@ -2,6 +2,15 @@
 // request, user object, URL, error message, header, or body into telemetry.
 const exactRoutes = new Set([
   '/',
+  '/explore',
+  '/daily',
+  '/contact',
+  '/admin',
+  '/api/catalog',
+  '/api/daily',
+  '/api/community/config',
+  '/api/public-profile',
+  '/api/reports',
   '/create',
   '/privacy',
   '/terms',
@@ -36,6 +45,28 @@ export function routeName(path) {
   if (/^\/g\/[^/]+\/results\/[^/]+\/?$/.test(path)) return '/g/:trip/results/:result';
   if (/^\/api\/games\/[^/]+\/results\/[^/]+\/?$/.test(path))
     return '/api/games/:trip/results/:result';
+  if (/^\/p\/[\w-]+(?:\/(?:play|live\/[\w-]+|results\/[\w-]+))?\/?$/.test(path))
+    return '/p/:edition';
+  if (/^\/contact\/[\w-]+$/.test(path)) return '/contact/:receipt';
+  const publication = path.match(
+    /^\/api\/publications\/[^/]+(?:\/(join|guess|round|leaderboard|photos\/[^/]+|results\/[^/]+|live(?:\/[^/]+(?:\/([^/]+))?)?))?\/?$/,
+  );
+  if (publication) {
+    const suffix = publication[1];
+    if (!suffix) return '/api/publications/:edition';
+    if (suffix.startsWith('photos/')) return '/api/publications/:edition/photos/:round';
+    if (suffix.startsWith('results/')) return '/api/publications/:edition/results/:result';
+    if (suffix.startsWith('live/'))
+      return (
+        '/api/publications/:edition/live/:lobby' +
+        (actions.has(publication[2]) ? `/${publication[2]}` : '')
+      );
+    return `/api/publications/:edition/${suffix}`;
+  }
+  if (/^\/api\/publications\//.test(path)) return '/api/publications/:edition/other';
+  if (/^\/api\/reports\//.test(path)) return '/api/reports/:receipt';
+  if (/^\/api\/admin(?:\/|$)/.test(path)) return '/api/admin/*';
+  if (/^\/api\/games\/[^/]+\/publication$/.test(path)) return '/api/games/:trip/publication';
   if (path.startsWith('/assets/')) return '/assets/*';
   if (/^\/g\/[a-zA-Z0-9_-]{8,40}\/?$/.test(path)) return '/g/:trip';
   if (/^\/g\/[a-zA-Z0-9_-]{8,40}\/live\/[a-zA-Z0-9_-]{8,40}\/?$/.test(path))
@@ -61,6 +92,12 @@ export function isAppPage(path) {
   return [
     '/',
     '/create',
+    '/explore',
+    '/daily',
+    '/contact',
+    '/admin',
+    '/p/:edition',
+    '/contact/:receipt',
     '/privacy',
     '/terms',
     '/cookies',
@@ -72,6 +109,14 @@ export function isAppPage(path) {
 
 const activities = new Map([
   ['GET /api/session', 'app_initializations'],
+  ['GET /api/catalog', 'catalog_requests'],
+  ['GET /api/daily', 'daily_requests'],
+  ['POST /api/games/:trip/publication', 'publication_requests'],
+  ['POST /api/publications/:edition/join', 'public_join_requests'],
+  ['POST /api/publications/:edition/guess', 'public_guess_requests'],
+  ['POST /api/publications/:edition/live', 'public_rooms_created'],
+  ['POST /api/publications/:edition/live/:lobby/join', 'public_live_join_requests'],
+  ['POST /api/publications/:edition/live/:lobby/guess', 'public_live_guess_requests'],
   ['POST /api/auth/session', 'creator_signins'],
   ['POST /api/games', 'trips_created'],
   ['POST /api/games/:trip/join', 'solo_join_requests'],

@@ -1,0 +1,44 @@
+# Public trips and daily challenges
+
+## Product behavior
+
+New uploads remain unlisted. In **My trips → Public sharing**, the owner supplies a public title/nickname/tags, fixes the solo timer, confirms rights and public visibility, and publishes a **separate edition with a new random link**. Original links, private creator names, old players and old scores do not enter Explore. Photos reuse the same private objects, without duplicate uploads. An edition's photo order, coordinates and timer are fixed for comparable scores. Unpublish hides that edition; pause sharing blocks both and permanently ends its existing public rooms; deleting the original removes both editions and their gameplay children. Saved third-party copies cannot be recalled.
+
+Explore searches title/tag word prefixes (2–40 characters) using Firestore indexes, with category filters, 20-item cursor pages and a bounded 30-second process cache. It is site search, not web-search indexing. Public trip, Explore, contact, API and photo responses keep noindex headers. There is no external search service or public bucket. Catalogue art contains no answer photos.
+
+Guests practise and join friend rooms. A signed-in player chooses a nickname and explicitly opts into a public ranked first attempt. Practice, hosting or joining a room consumes first-attempt eligibility for the account and current browser; clearing cookies/using multiple accounts cannot be fully prevented. Authors cannot rank on their own editions. Ranked completion is written transactionally once and ordered by points, then total guessing time (completion timestamp gives a stable display order). Tied points/time share rank. Public score rows contain nickname, points, distances, duration and completion time, never Google details or exact guesses. Players can remove scores from results or **My public scores**, even after an edition is unpublished; removal does not reset eligibility.
+
+Each public edition supports independent friend rooms. Any signed-in, unrestricted account can host; guests can play. Room hosts have room controls, not the original creator's rights. Limits: one active hosted room/account, ten creations/account/UTC day, twenty players, 24-hour expiry, and a 15-minute idle waiting lobby. Existing timer, spectator-host, next-round control, preparation barrier and saved-pin behavior are reused. Public rooms use their own documents and private draft collection. SSE fans out one room listener per instance, with small companion watches for edition/source/asset withdrawal; those watches reuse snapshots rather than rereading documents on every notification.
+
+## Official photos and scheduling
+
+The initial library targets 200 reviewed CC0 photos and three five-photo evergreen trips. Images are downloaded once, limited to 1600 pixels / 1 MiB, re-encoded without metadata, and served through progress-checked routes from the existing private bucket. No Commons/stock-photo API runs during gameplay. Source titles, authors, licence links and transformation notes appear after each reveal. They are withheld before guessing because source pages expose locations.
+
+`collect-official-photos.mjs` creates **candidates only** under gitignored `.local/official-pool/`. Source pages must explicitly identify CC0, a camera-location template, and matching coordinate metadata. Reject unclear licences, synthetic/rendered scenes, focal contemporary artwork, private interiors, identifiable people without suitable rights, sensitive locations, visible GPS answer overlays, and poor rounds. Third-party rights still matter for public-domain photos. Historical Unsplash sources require positive licence-review evidence or a source archive predating its June 2017 licence change; modern Unsplash terms are not CC0. Store source revision, retrieved licence metadata/page evidence, hash, coordinates, review method/date and outcome privately. Agent-assisted review is labelled as such; it is not a claim that the operator personally inspected each image or a legal certification. Source coordinates are not independent survey measurements.
+
+Only approved records can be seeded. The seed tool checks byte hashes, CC0 evidence, dimensions and stripped metadata before uploads. It will not overwrite an existing photo or edition with different content. Candidate/provenance/answer manifests and media must never be committed to the public repository. The source/licence URLs become public only through revealed photo credits.
+
+Daily challenges contain five photos, sixty seconds each. The active date is calculated at midnight **UTC**, with no cron or scheduler service. One year of private manifests is prepared in advance. Selection is deterministic, prefers different countries and enforces a 30-day photo cooldown across adjacent scheduling runs. A transaction lease serializes scheduling; retries preserve existing dates. Ranked play must begin on the challenge date and finish within thirty minutes, including breaks; archived dates allow practice and friend rooms. A missing/withdrawn daily falls back to evergreen trips and emits a private operator alert. Future dates and their photos are inaccessible through public routes.
+
+Withdrawal through **Admin → Photo review** immediately disables affected editions/rooms through the asset-control record and photo checks. Review affected future manifests before continuing the schedule; never silently change an already released ranked challenge. Replace invalid future sets through the operator tool under the scheduler lease, preserve current/past records and rerun cooldown validation. Keep enough spare approved photos for replacements.
+
+## Reports and moderation
+
+`/contact` is available without sign-in, independently of the public feature flag. It creates a random private receipt with a separate secret in the URL fragment. Only the bearer of that complete link and the operator can read/reply; tokens and messages are excluded from telemetry. Optional reporter email is not posted publicly and no automatic reply email is sent. The operator gets a sanitized private alert and responds in **Admin → Reports**. Publish the support alias only after mail forwarding is verified; it is inbound forwarding, not an outbound mailbox. Never reply from the personal mailbox if doing so would expose its address; use the receipt page.
+
+Admin access is a server-side UID allowlist. It supports reasons for edition removal/restoration, score removal, public-activity suspension/restoration, photo review and schedule extension. Account restrictions block publication, hosting and new public score submission, including an attempt completed after suspension. Affected users see the reason in My trips and can appeal through Contact. Decisions are manual. Notices describe rights, limits and retention; an operator still has to review reports and applicable legal obligations.
+
+## Rollout and operation
+
+```sh
+PROJECT_ID=your-project node scripts/configure-public-infrastructure.mjs
+# Review the additive index/TTL changes, then repeat with --apply.
+PROJECT_ID=your-project PHOTO_BUCKET=your-private-bucket node scripts/seed-official-trips.mjs
+# Requires a private approved.json manifest; dry-run by default, --apply to seed.
+```
+
+`PUBLIC_TRIPS_ENABLED=true` enables public routes/UI. `ADMIN_UIDS` is a private comma-separated Firebase UID allowlist. `PUBLIC_SUPPORT_EMAIL` is optional and must be a working public address. Local/test defaults enable public features and local developer administration; production defaults disable both until explicitly configured. User uploads are never bulk-published. Deploy code through the existing GitHub main pipeline after tests; indexes, TTL, reviewed content, runtime configuration and monitoring are separate operator operations. Rollback: disable `PUBLIC_TRIPS_ENABLED`; preserve data and keep Contact available. Admins can still inspect disabled public functionality.
+
+Monitor `daily_unavailable`, `report_received`, error/throttle metrics, aggregate public joins/guesses/rooms and provider usage. Alerts contain no report bodies, names, private links or photo coordinates. A 30-second catalogue/score cache can briefly show a withdrawn summary on another instance, but every game/photo/room request rechecks canonical access. Costs and limitations are in [COSTS-AND-LIMITS.md](COSTS-AND-LIMITS.md); deletion instructions are in [PRIVACY-OPERATIONS.md](PRIVACY-OPERATIONS.md).
+
+Sources: [Commons reuse guidance](https://commons.wikimedia.org/wiki/Commons:Reusing_content_outside_Wikimedia), [non-copyright restrictions](https://commons.wikimedia.org/wiki/Commons:Non-copyright_restrictions), [CC0 legal terms](https://creativecommons.org/publicdomain/zero/1.0/legalcode), [Firestore index configuration](https://firebase.google.com/docs/reference/firestore/indexes), [TTL behavior](https://firebase.google.com/docs/firestore/ttl).

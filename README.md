@@ -14,9 +14,15 @@ Live hosts watch by default or opt to play. The host starts the first round; lat
 
 Live sessions use SSE through the existing server and one Firestore listener per room per instance, with polling fallback. Streams reconnect every 45 seconds and disconnect in hidden/finished tabs. A connected room keeps Cloud Run billable; see [cost assumptions](docs/COSTS-AND-LIMITS.md). Lobby links/private drafts expire after 24 hours; stored lobby results remain until replaced/deleted. Existing lobbies retain their older protocol. `/g/<trip-id>` opens the active lobby, then supports independent play after it ends. Existing solo results are retained. See [migration and retention operations](docs/PRIVACY-OPERATIONS.md).
 
+## Public trips and daily challenges
+
+[Explore public trips](https://tripguessr.com/explore): opt-in community editions, official five-photo trips, and a daily challenge that changes at midnight UTC. Guests can practise; Google sign-in and public-score consent enable one ranked first attempt per edition. Rankings use points then guessing time. Players can withdraw their scores. Any signed-in user can create a separate private friend room on a public trip.
+
+The official CC0 photo library is curated separately from source code. Photos are optimized and served from the existing private bucket, with source/licence credits after each reveal. Daily manifests are prepared ahead of time; no extra scheduled service or image API is needed. Contact/report receipts and operator moderation are built in. See [publication, curation and rollout operations](docs/PUBLIC-TRIPS.md).
+
 ## Privacy and operating costs
 
-Trips are **link-only**, with no public directory. New links have 128 bits of randomness. Trip pages/API/photos carry noindex headers, private responses are not cached, and the owner can **Pause sharing** or delete the trip. Anyone with a link can forward it or save content; noindex is not authentication or guaranteed secrecy.
+Trips are **link-only by default**. Owners can explicitly publish a separate public edition in Explore. New links have 128 bits of randomness. Trip pages/API/photos carry noindex headers, private responses are not cached, and the owner can **Pause sharing** or delete the trip. Anyone with a link can forward it or save content; noindex is not authentication or guaranteed secrecy.
 
 [Privacy notice](https://tripguessr.com/privacy) · [Terms](https://tripguessr.com/terms) · [Cookies](https://tripguessr.com/cookies)
 
@@ -110,7 +116,7 @@ The Worker also forwards `/__/auth/*` and `/__/firebase/init.json` to the existi
 - Firestore stores trips, an owner UID and quota slots for each creator, anonymous player runs/leaderboards, and one bounded live-session state per trip. It does not duplicate email addresses or build a separate login-history database. Cloud Run is the only application client allowed to access it.
 - Each creator can keep **5 active trips**, with **12 photos per trip** and at most **2 MiB per stored photo** (up to 120 MiB of current photos per creator). Upload slots are reserved transactionally before image processing; failed uploads are removed, and interrupted uploads/deletes are retried when the creator returns. Deleting a trip frees its slot after its photos are removed.
 - Limits and request throttling reduce casual abuse; they are not a hard spending cap or a guarantee against many-account abuse. Published user trips do not expire automatically. Demo progress and scores expire after 30 days and are cleaned up with Firestore TTL. Cloud Storage soft-deleted objects may remain billable during the bucket’s retention period.
-- There is no public trip directory. Anyone with a trip link can join; Google login is needed only for creating and managing trips.
+- Unlisted trip links stay private by default. Owners can opt into a separate public edition. Google login is needed for creation, public ranked attempts and hosting public friend rooms; guests can practise or join rooms.
 
 For an existing installation, sign in once with the approved owner’s Google account, then migrate old trips. Dry-run first; `--apply` writes a private backup and preserves invite links, photos, and player results:
 
@@ -131,7 +137,7 @@ Legacy host keys no longer grant access. The deployment removes the old `HOST_KE
 - Each correct location and reveal caption stays on the server until the solo guess is committed or the shared live round is revealed. Completed rounds cannot be changed. Firestore transactions protect scoring from concurrent submissions.
 - Scores use `round(5000 × exp(-distanceKm / 1500))`; 5,000 points for an exact guess. Distance uses the haversine formula.
 - A secure, HttpOnly browser cookie identifies each friend. Closing/reopening the page resumes the game. Clearing cookies or changing devices starts a new entry. This is a friendly game, not a cheat-proof competition.
-- There is no public trip directory. Anyone with a trip link can play and see its photos; share links only with intended friends. Hosts can pause link access or delete trips and their leaderboards.
+- Only explicitly published editions appear in Explore. Anyone with an unlisted trip link can play and see its photos; share those links only with intended friends. Hosts can pause link access or delete trips and their leaderboards.
 - No Google Maps key, email delivery setup, or player accounts are required. OpenStreetMap tiles require internet access. In-memory request limits apply per server instance: 900 API requests/minute per network and 3,000 total/minute before authentication/database access, plus 500 ordinary requests/15 minutes or 45 live requests/minute per player. Network keys are transient salted hashes, never saved to the database or logs. These are abuse controls, not a hard spending cap.
 
 ## Reference and asset credits

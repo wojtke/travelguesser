@@ -5,6 +5,7 @@ import sharp from 'sharp';
 import { createApp } from '../server/app.js';
 import { LocalStore } from '../server/store.js';
 import { newLive } from '../server/live.js';
+import { createPublicService } from '../server/public-service.js';
 const directory = await mkdtemp(path.join(os.tmpdir(), 'tripguessr-browser-'));
 const store = new LocalStore(directory);
 const photo = await sharp({
@@ -34,6 +35,26 @@ for (const [id, mode] of [
   await store.publishGame(id, game.ownerUid, photo.length * 2);
   if (mode === 'live') await store.mutateGame(id, (g) => newLive(g));
 }
+const publicSource = {
+  id: 'public-browser-source',
+  ownerUid: 'different-creator',
+  title: 'Synthetic public source',
+  hostName: 'Unlisted host',
+  createdAt: Date.now(),
+  photos: [{ key: '0.jpg', lat: 0, lng: 0 }],
+};
+await store.beginGame(publicSource);
+await store.savePhoto(publicSource.id, '0.jpg', photo);
+await store.publishGame(publicSource.id, publicSource.ownerUid, photo.length);
+const publicService = createPublicService(store);
+await publicService.publish(publicSource.id, publicSource.ownerUid, {
+  title: 'Public browser trip',
+  nickname: 'Test creator',
+  tags: ['Testing'],
+  timeLimitSeconds: 60,
+  rightsConfirmed: true,
+  visibilityConfirmed: true,
+});
 const server = createApp({ store, rateLimits: false }).listen(4179, '127.0.0.1');
 async function close() {
   server.close();

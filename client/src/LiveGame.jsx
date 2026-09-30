@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, ArrowRight, MapPin, Users, Copy, LoaderCircle } from 'lucide-react';
+import PhotoCredit from './PhotoCredit';
 import useLiveSession from './useLiveSession';
 import { formatDistance } from './api';
 import Map, { playerColors } from './Map';
@@ -7,9 +8,9 @@ import PhotoViewer from './PhotoViewer';
 import MapPanel from './MapPanel';
 import RoundClock, { enableCountdownAudio } from './RoundClock';
 import { Standings, ScoreMatrix, ShareActions, RoundCards, duration } from './ResultsPanels';
-export default function LiveGame({ id, liveId, navigate, notify }) {
+export default function LiveGame({ id, liveId, navigate, notify, publicTrip = false }) {
   const { live, error, fatal, busy, pin, setPin, saveStatus, retrySave, action, refresh, ready } =
-    useLiveSession(id, liveId);
+    useLiveSession(id, liveId, publicTrip);
   const [name, setName] = useState(''),
     [now, setNow] = useState(Date.now()),
     [loadedRound, setLoadedRound] = useState(-1),
@@ -482,14 +483,20 @@ export default function LiveGame({ id, liveId, navigate, notify }) {
           </button>
         )}
       </div>
+      <PhotoCredit credit={live.credit} />
       {finished && live.me?.active && (
         <RoundCards
           id={id}
           results={live.me.results || []}
-          photoUrl={(round) => `/api/games/${id}/live/${liveId}/photos/${round}`}
+          photoUrl={(round) =>
+            `/api/${publicTrip ? 'publications' : 'games'}/${id}/live/${liveId}/photos/${round}`
+          }
         />
       )}
-      {finished && live.me?.active && <ShareActions id={id} source={liveId} notify={notify} />}{' '}
+      <PhotoCredit credit={live.credit} />
+      {finished && live.me?.active && (
+        <ShareActions id={id} source={liveId} notify={notify} publicTrip={publicTrip} />
+      )}{' '}
       {errors}
     </main>
   );

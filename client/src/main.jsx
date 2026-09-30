@@ -10,11 +10,18 @@ const Game = lazy(() => import('./Game'));
 const LiveGame = lazy(() => import('./LiveGame'));
 const CreateTrip = lazy(() => import('./CreateTrip'));
 const Legal = lazy(() => import('./Legal'));
+const Explore = lazy(() => import('./Community').then((m) => ({ default: m.Explore })));
+const PublicTrip = lazy(() => import('./Community').then((m) => ({ default: m.PublicTrip })));
+const Contact = lazy(() => import('./Contact'));
+const CommunityAdmin = lazy(() => import('./CommunityAdmin'));
+import './community.css';
 import './styles.css';
 import './game.css';
 import './live.css';
 function App() {
-  const [route, setRoute] = useState(location.pathname);
+  const [route, setRoute] = useState(location.pathname + location.search);
+  const path = route.split('?')[0];
+  const [community, setCommunity] = useState({ enabled: false, admin: false });
   const [user, setUser] = useState(null),
     [authConfig, setAuthConfig] = useState(null),
     [ready, setReady] = useState(false);
@@ -24,7 +31,8 @@ function App() {
   const notify = (message) => setToast(message);
   const navigate = (path) => {
     history.pushState({}, '', path);
-    setRoute(path);
+    const target = new URL(path, location.origin);
+    setRoute(target.pathname + target.search);
     window.scrollTo(0, 0);
   };
   useEffect(() => {
@@ -33,7 +41,7 @@ function App() {
       localStorage.removeItem('tg_player_name');
       localStorage.removeItem('tg_host_name');
     } catch {}
-    const listener = () => setRoute(location.pathname);
+    const listener = () => setRoute(location.pathname + location.search);
     addEventListener('popstate', listener);
     if (new URLSearchParams(location.hash.slice(1)).has('host'))
       history.replaceState({}, '', location.pathname);
@@ -51,6 +59,12 @@ function App() {
     const timer = setTimeout(() => setToast(''), 6000);
     return () => clearTimeout(timer);
   }, [toast]);
+  useEffect(() => {
+    if (ready)
+      api('/community/config')
+        .then(setCommunity)
+        .catch(() => {});
+  }, [ready, user?.uid]);
   const create = () => (host ? navigate('/create') : setLogin('/create'));
   const signOut = async () => {
     try {
@@ -79,11 +93,21 @@ function App() {
             tripguessr<span className="brand-dot">.</span>
           </a>
           <nav aria-label="Main navigation">
+            {(community.enabled || community.admin) && (
+              <button className="text-button" onClick={() => navigate('/explore')}>
+                Explore
+              </button>
+            )}
+            {community.admin && (
+              <button className="text-button" onClick={() => navigate('/admin')}>
+                Admin
+              </button>
+            )}
             <a
               className="how-link"
               href="/#how-it-works"
               onClick={(e) => {
-                if (route !== '/') {
+                if (path !== '/') {
                   e.preventDefault();
                   navigate('/');
                   setTimeout(
@@ -137,7 +161,7 @@ function App() {
           <div className="loading-page">
             <LoaderCircle className="spin" /> Loading…
           </div>
-        ) : route === '/create' ? (
+        ) : path === '/create' ? (
           host ? (
             <CreateTrip
               user={user}
@@ -157,29 +181,72 @@ function App() {
               </button>
             </div>
           )
-        ) : /^\/g\/[^/]+\/results\/[^/]+\/?$/.test(route) ? (
+        ) : /^\/g\/[^/]+\/results\/[^/]+\/?$/.test(path) ? (
           <SharedResults
             key={route}
-            id={route.split('/')[2]}
-            token={route.split('/')[4]}
+            id={path.split('/')[2]}
+            token={path.split('/')[4]}
             navigate={navigate}
           />
-        ) : /^\/g\/[^/]+\/live\/[^/]+\/?$/.test(route) ? (
+        ) : /^\/g\/[^/]+\/live\/[^/]+\/?$/.test(path) ? (
           <LiveGame
             key={route}
-            id={route.split('/')[2]}
-            liveId={route.split('/')[4]}
+            id={path.split('/')[2]}
+            liveId={path.split('/')[4]}
             navigate={navigate}
             notify={notify}
           />
-        ) : ['/privacy', '/terms', '/cookies'].includes(route) ? (
-          <Legal page={route.slice(1)} />
-        ) : /^\/g\/[^/]+\/?$/.test(route) ? (
-          <Game key={route} id={route.split('/')[2]} navigate={navigate} notify={notify} />
-        ) : route === '/' ? (
+        ) : path === '/explore' ? (
+          <Explore key={route} navigate={navigate} />
+        ) : path === '/admin' ? (
+          <CommunityAdmin navigate={navigate} />
+        ) : path === '/contact' || /^\/contact\/[^/]+$/.test(path) ? (
+          <Contact key={route} id={path.split('/')[2]} navigate={navigate} />
+        ) : /^\/p\/[^/]+\/results\/[^/]+$/.test(path) ? (
+          <SharedResults
+            key={route}
+            id={path.split('/')[2]}
+            token={path.split('/')[4]}
+            navigate={navigate}
+            publicTrip
+          />
+        ) : /^\/p\/[^/]+\/live\/[^/]+$/.test(path) ? (
+          <LiveGame
+            key={route}
+            id={path.split('/')[2]}
+            liveId={path.split('/')[4]}
+            navigate={navigate}
+            notify={notify}
+            publicTrip
+          />
+        ) : /^\/p\/[^/]+\/play$/.test(path) ? (
+          <Game
+            key={route}
+            id={path.split('/')[2]}
+            navigate={navigate}
+            notify={notify}
+            publicTrip
+            user={user}
+            signIn={() => setLogin(route)}
+          />
+        ) : /^\/p\/[^/]+$/.test(path) ? (
+          <PublicTrip
+            key={route}
+            id={path.split('/')[2]}
+            navigate={navigate}
+            notify={notify}
+            user={user}
+            signIn={() => setLogin(route)}
+          />
+        ) : ['/privacy', '/terms', '/cookies'].includes(path) ? (
+          <Legal page={path.slice(1)} />
+        ) : /^\/g\/[^/]+\/?$/.test(path) ? (
+          <Game key={route} id={path.split('/')[2]} navigate={navigate} notify={notify} />
+        ) : path === '/' ? (
           <Home
             key={user?.uid || 'guest'}
             host={host}
+            community={community.enabled || community.admin}
             create={create}
             navigate={navigate}
             notify={notify}
@@ -209,6 +276,7 @@ function App() {
             ['/privacy', 'Privacy'],
             ['/terms', 'Terms'],
             ['/cookies', 'Cookies'],
+            ['/contact', 'Contact / report'],
           ].map(([url, label]) => (
             <a
               key={url}

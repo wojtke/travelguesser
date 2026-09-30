@@ -1,0 +1,246 @@
+.community-page {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 42px 28px 80px;
+}
+.community-page h1 {
+  font-size: clamp(2.2rem, 5vw, 3.8rem);
+  margin: 8px 0 20px;
+}
+.daily-card {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin: 28px 0;
+  padding: 28px;
+  background: #eef3e7;
+}
+.daily-card > div:nth-child(2) {
+  flex: 1;
+}
+.daily-card h2 {
+  margin: 7px 0;
+  font-size: 1.55rem;
+}
+.daily-card p {
+  margin: 8px 0;
+}
+.daily-icon {
+  color: #506744;
+}
+.catalog-search {
+  display: flex;
+  align-items: end;
+  gap: 16px;
+  margin: 32px 0;
+}
+.catalog-search label:first-child {
+  flex: 1;
+}
+.catalog-search label {
+  display: grid;
+  gap: 8px;
+}
+.catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 22px;
+  margin-bottom: 28px;
+}
+.catalog-card {
+  padding: 0;
+  overflow: hidden;
+}
+.catalog-art {
+  height: 128px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  background: #e5eee6;
+  color: #395f4c;
+}
+.catalog-art.community {
+  background: #efeadc;
+  color: #665b3c;
+}
+.catalog-art.daily {
+  background: #e6eafa;
+  color: #495c83;
+}
+.catalog-copy {
+  padding: 22px;
+}
+.catalog-copy h2 {
+  font-size: 1.3rem;
+  margin: 16px 0 8px;
+  overflow-wrap: anywhere;
+}
+.catalog-copy h2 a {
+  color: inherit;
+  text-decoration: none;
+}
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 12px 0 20px;
+}
+.tags span {
+  background: #f0f0e9;
+  border-radius: 30px;
+  font-size: 0.75rem;
+  padding: 5px 10px;
+}
+.public-trip-heading {
+  max-width: 850px;
+  margin: 32px auto;
+  text-align: center;
+}
+.public-trip-heading h1 {
+  overflow-wrap: anywhere;
+}
+.public-play-choice {
+  border: 1px solid #d6ddcc;
+  background: #f7faf3;
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 18px;
+}
+.photo-credit {
+  font-size: 0.78rem;
+  margin: 10px 0;
+  overflow-wrap: anywhere;
+}
+.photo-credit summary {
+  cursor: pointer;
+  text-decoration: underline;
+}
+.contact-page form,
+.admin-layout label {
+  display: grid;
+  gap: 14px;
+}
+.contact-page label,
+.admin-layout label {
+  display: grid;
+  gap: 7px;
+}
+.contact-page textarea,
+.admin-layout textarea {
+  width: 100%;
+  font: inherit;
+  padding: 12px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+}
+.contact-page .checkbox-label,
+.admin-layout .checkbox-label {
+  display: flex;
+  gap: 10px;
+}
+.report-thread {
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  display: grid;
+  gap: 14px;
+  margin: 24px 0;
+}
+.report-thread .panel {
+  padding: 18px;
+}
+.report-thread small {
+  display: block;
+  margin-top: 5px;
+}
+.admin-layout {
+  display: grid;
+  grid-template-columns: 1fr 1.6fr;
+  gap: 24px;
+  margin: 30px 0;
+}
+.admin-layout > .panel {
+  min-width: 0;
+  padding: 24px;
+}
+.admin-row {
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  border-bottom: 1px solid #ddd;
+  text-align: left;
+  padding: 16px 0;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.admin-row:hover {
+  background: #f3f5ef;
+}
+.admin-row span {
+  font-size: 0.8rem;
+}
+.review-photo {
+  max-width: 100%;
+  max-height: 420px;
+  object-fit: contain;
+}
+.community-page .panel form {
+  display: grid;
+  gap: 12px;
+}
+@media (max-width: 800px) {
+  .catalog-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .daily-card {
+    flex-wrap: wrap;
+  }
+  .admin-layout {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 520px) {
+  .community-page {
+    padding: 24px 16px 60px;
+  }
+  .catalog-grid {
+    grid-template-columns: 1fr;
+  }
+  .catalog-search {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .daily-card {
+    padding: 20px;
+    gap: 14px;
+  }
+  .daily-card .button {
+    width: 100%;
+  }
+  .daily-icon {
+    display: none;
+  }
+  .site-header .how-link {
+    display: none;
+  }
+  .public-play-choice {
+    padding: 12px;
+  }
+  .public-trip-heading .center-buttons {
+    flex-direction: column;
+  }
+}
+.catalog-search select,
+.contact-page select {
+  width: 100%;
+  min-height: 46px;
+  padding: 10px 12px;
+  border: 1px solid var(--line, #d6dac9);
+  background: var(--paper, #fffefa);
+  border-radius: 8px;
+  color: inherit;
+  font: inherit;
+}

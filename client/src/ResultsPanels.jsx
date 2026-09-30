@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import Map from './Map';
+import PhotoCredit from './PhotoCredit';
 import { api, json, copyLink, formatDistance } from './api';
 export function duration(ms) {
   if (ms == null) return '—';
@@ -11,8 +12,14 @@ export function duration(ms) {
 export function finished(value) {
   return value ? new Date(value).toLocaleString() : '—';
 }
-export const rankAt = (rows, i) => 1 + rows.filter((p) => p.score > rows[i].score).length;
-export function Standings({ rows, meId }) {
+export const rankAt = (rows, i, tieBreakTime = false) =>
+  1 +
+  rows.filter(
+    (p) =>
+      p.score > rows[i].score ||
+      (tieBreakTime && p.score === rows[i].score && p.durationMs < rows[i].durationMs),
+  ).length;
+export function Standings({ rows, meId, tieBreakTime = false }) {
   return (
     <div className="score-scroll">
       <table className="scores-table">
@@ -29,8 +36,8 @@ export function Standings({ rows, meId }) {
           {rows.map((p, i) => (
             <tr key={p.id || i} className={p.id && p.id === meId ? 'my-score' : ''}>
               <td>
-                {rankAt(rows, i)}
-                {rankAt(rows, i) === 1 ? ' 🏆' : ''}
+                {rankAt(rows, i, tieBreakTime)}
+                {rankAt(rows, i, tieBreakTime) === 1 ? ' 🏆' : ''}
               </td>
               <th scope="row">
                 {p.name}
@@ -145,6 +152,7 @@ export function RoundCards({ id, results, photoUrl }) {
               {duration(r.durationMs)}
             </p>
             {r.caption && <p>{r.caption}</p>}
+            <PhotoCredit credit={r.credit} />
             {r.actual && <MiniMap result={r} />}
           </article>
         ))}
@@ -152,7 +160,7 @@ export function RoundCards({ id, results, photoUrl }) {
     </section>
   );
 }
-export function ShareActions({ id, source = 'solo', notify }) {
+export function ShareActions({ id, source = 'solo', notify, publicTrip = false }) {
   const [url, setUrl] = useState(''),
     [busy, setBusy] = useState(false),
     [error, setError] = useState('');
@@ -160,7 +168,10 @@ export function ShareActions({ id, source = 'solo', notify }) {
     setBusy(true);
     setError('');
     try {
-      const data = await api(`/games/${id}/results/share`, json('POST', { source }));
+      const data = await api(
+        `/${publicTrip ? 'publications' : 'games'}/${id}/results/share`,
+        json('POST', { source }),
+      );
       const link = location.origin + data.url;
       setUrl(link);
       try {
@@ -178,7 +189,7 @@ export function ShareActions({ id, source = 'solo', notify }) {
   return (
     <div className="share-actions">
       <div className="center-buttons">
-        <button className="button outline" onClick={() => copyLink(id, notify)}>
+        <button className="button outline" onClick={() => copyLink(id, notify, publicTrip)}>
           Invite to trip
         </button>
         <button className="button" disabled={busy} onClick={share}>
@@ -208,11 +219,11 @@ export function ShareActions({ id, source = 'solo', notify }) {
     </div>
   );
 }
-export default function SharedResults({ id, token, navigate }) {
+export default function SharedResults({ id, token, navigate, publicTrip = false }) {
   const [result, setResult] = useState(null),
     [error, setError] = useState('');
   useEffect(() => {
-    api(`/games/${id}/results/${token}`)
+    api(`/${publicTrip ? 'publications' : 'games'}/${id}/results/${token}`)
       .then(setResult)
       .catch((e) => setError(e.message));
   }, [id, token]);
@@ -234,7 +245,7 @@ export default function SharedResults({ id, token, navigate }) {
       <p>
         Guessing time: {duration(result.durationMs)} · Completed: {finished(result.finishedAt)}
       </p>
-      <button className="button" onClick={() => navigate(`/g/${id}`)}>
+      <button className="button" onClick={() => navigate(`/${publicTrip ? 'p' : 'g'}/${id}`)}>
         Play this trip
       </button>
       <p className="small-note">

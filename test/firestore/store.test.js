@@ -15,7 +15,7 @@ const store = new CloudStore({
   bucket: { deleteFiles: async (options) => deleted.push(options.prefix) },
 });
 after(async () => {
-  for (const collection of ['games', 'creators'])
+  for (const collection of ['games', 'creators', 'publications', 'publicProfiles', 'publicControl'])
     await db.recursiveDelete(db.collection(collection));
   await new Promise((resolve) => setTimeout(resolve, 250));
   await db.terminate();
@@ -185,5 +185,61 @@ test('Firestore draft versions serialize with timeout, sharing is idempotent, an
     assert.equal(await store.getLiveDraft(game.id, id, 'a'), null);
   } finally {
     for (const res of responses) res.emit('close');
+  }
+});
+
+test('public ranked transactions serialize across instances and source deletion removes scores and rooms', async () => {
+  const { createPublicService } = await import('../../server/public-service.js');
+  const source = await publish(fixture('public-firestore-source', 'public-owner'));
+  const one = createPublicService(store),
+    two = createPublicService(new CloudStore({ db, bucket: {} }));
+  const p = await one.publish(source.id, source.ownerUid, {
+    title: 'Public edition',
+    nickname: 'Author',
+    tags: ['test'],
+    rightsConfirmed: true,
+    visibilityConfirmed: true,
+  });
+  const a = { uid: 'rank-player', playerId: 'rank-browser' },
+    input = { name: 'Ranked', ranked: true, consent: true };
+  const joins = await Promise.all([one.join(p.id, a, input), two.join(p.id, a, input)]);
+  assert.equal(joins[0].publicId, joins[1].publicId);
+  const guesses = await Promise.all(
+    [one, two].map((s) => s.updateRun(p.id, a, 'guess', { round: 0, lat: 0, lng: 0 })),
+  );
+  assert.ok(guesses.every((g) => g.run.score === 5000));
+  assert.equal((await two.board(p.id)).length, 1);
+  assert.equal((await one.data.list(`${one.profilePath(a.uid)}/scores`)).length, 1);
+  const rooms = await Promise.all([
+    one.createRoom(p.id, { uid: 'host-a', playerId: 'host-browser-a' }, {}),
+    two.createRoom(p.id, { uid: 'host-b', playerId: 'host-browser-b' }, {}),
+  ]);
+  assert.notEqual(rooms[0].live.id, rooms[1].live.id);
+  const seen = [],
+    stop = two.streamStore.watchGame(
+      `${p.id}:${rooms[0].live.id}`,
+      (g) => seen.push(g),
+      (e) => {
+        throw e;
+      },
+    );
+  try {
+    const waitFor = async (predicate) => {
+      const until = Date.now() + 5000;
+      while (!predicate() && Date.now() < until) await new Promise((r) => setTimeout(r, 25));
+      assert.ok(predicate());
+    };
+    await waitFor(() => seen.some(Boolean));
+    await store.mutateGame(source.id, (g) => ({ ...g, sharing: false, sharingVersion: 1 }));
+    await waitFor(() => seen.at(-1) === null);
+    await store.mutateGame(source.id, (g) => ({ ...g, sharing: true }));
+    await assert.rejects(one.room(p.id, rooms[0].live.id), { status: 410 });
+    await store.deleteGame(source.id, source.ownerUid);
+    assert.equal(await one.data.get(`publications/${p.id}`), null);
+    assert.equal((await one.data.list(`${one.profilePath(a.uid)}/scores`)).length, 0);
+    assert.equal((await db.collection(`publications/${p.id}/publicRooms`).get()).size, 0);
+    assert.equal((await db.collection(`publications/${p.id}/rankClaims`).get()).size, 0);
+  } finally {
+    stop();
   }
 });

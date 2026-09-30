@@ -17,8 +17,11 @@ import Map from './Map';
 import PhotoViewer from './PhotoViewer';
 import MapPanel from './MapPanel';
 import RoundClock, { enableCountdownAudio } from './RoundClock';
+import PhotoCredit from './PhotoCredit';
 import CoordinateFields from './CoordinateFields';
-export default function Game({ id, navigate, notify }) {
+export default function Game({ id, navigate, notify, publicTrip = false, user, signIn }) {
+  const base = `/${publicTrip ? 'publications' : 'games'}/${id}`;
+  const [ranked, setRanked] = useState(false);
   const [game, setGame] = useState(null),
     [run, setRun] = useState(null),
     [name, setName] = useState('');
@@ -30,23 +33,25 @@ export default function Game({ id, navigate, notify }) {
     [loading, setLoading] = useState(true);
   const submitting = useRef(false);
   useEffect(() => {
-    api(`/games/${id}`)
+    api(`${base}`)
       .then((data) => {
         if (data.game.liveId) {
           navigate(`/g/${id}/live/${data.game.liveId}`);
           return;
         }
         setGame(data.game);
+        if (!data.game.canRank) setRanked(false);
+        if (publicTrip) setName(data.game.nickname || '');
         setRun(data.run);
         if (data.run?.awaitingNext) setResult(data.run.results.at(-1));
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [id, user?.uid]);
   useEffect(() => {
     if (run?.completed) {
-      api(`/games/${id}/leaderboard`)
-        .then(setBoard)
+      api(`${base}/leaderboard`)
+        .then((data) => setBoard(Array.isArray(data) ? data : data.items))
         .catch((e) => notify(e.message));
     }
   }, [run?.completed, id]);
@@ -56,7 +61,10 @@ export default function Game({ id, navigate, notify }) {
     setBusy(true);
     setError('');
     try {
-      const data = await api(`/games/${id}/join`, json('POST', { name }));
+      const data = await api(
+        `${base}/join`,
+        json('POST', { name, ranked: publicTrip && ranked, consent: publicTrip && ranked }),
+      );
       setRun(data);
     } catch (e) {
       setError(e.message);
@@ -71,7 +79,7 @@ export default function Game({ id, navigate, notify }) {
     setError('');
     try {
       const data = await api(
-        `/games/${id}/guess`,
+        `${base}/guess`,
         json('POST', { ...pin, timedOut: timedOut === true, round: run.round }),
       );
       setResult(data.result);
@@ -87,8 +95,7 @@ export default function Game({ id, navigate, notify }) {
     if (busy) return;
     setBusy(true);
     try {
-      if (!run.completed)
-        setRun(await api(`/games/${id}/round`, json('POST', { round: run.round })));
+      if (!run.completed) setRun(await api(`${base}/round`, json('POST', { round: run.round })));
       setResult(null);
       setPin(null);
       setError('');
@@ -170,6 +177,37 @@ export default function Game({ id, navigate, notify }) {
             </span>
           </div>
           <form onSubmit={join}>
+            {publicTrip && (
+              <div className="public-play-choice">
+                {game.canRank ? (
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={ranked}
+                      onChange={(e) => setRanked(e.target.checked)}
+                    />
+                    Count my first attempt and publish my nickname, scores and completion time.
+                  </label>
+                ) : (
+                  <p className="small-note">
+                    {game.signedIn
+                      ? 'Practice play. Ranked first attempts are unavailable for this account or date.'
+                      : 'Play as a guest for practice, or sign in before starting to enter the public leaderboard.'}
+                  </p>
+                )}
+                {!game.signedIn && (
+                  <button type="button" className="button outline" onClick={signIn}>
+                    Sign in with Google
+                  </button>
+                )}
+                <p className="small-note">
+                  {ranked
+                    ? 'One ranked attempt. Replays and friend rooms are practice.'
+                    : 'Practice scores are not published.'}
+                </p>
+              </div>
+            )}
+
             <label htmlFor="player-name">Your name</label>
             <input
               id="player-name"
@@ -211,20 +249,70 @@ export default function Game({ id, navigate, notify }) {
             {run.score.toLocaleString()}
             <span>/ {(game.rounds * 5000).toLocaleString()} points</span>
           </div>
-          <ShareActions id={id} notify={notify} />
+          <ShareActions id={id} notify={notify} publicTrip={publicTrip} />
+          {publicTrip && (
+            <div className="center-buttons">
+              <p>
+                {run.ranked
+                  ? 'Ranked first attempt'
+                  : run.rankReason || 'Practice result — not on the public leaderboard.'}
+              </p>
+              <button
+                className="button outline"
+                onClick={async () => {
+                  try {
+                    setRun(
+                      await api(`${base}/join`, json('POST', { name: run.name, restart: true })),
+                    );
+                    setResult(null);
+                    setPin(null);
+                  } catch (e) {
+                    notify(e.message);
+                  }
+                }}
+              >
+                Play again for practice
+              </button>
+              {run.ranked && (
+                <button
+                  className="text-button"
+                  onClick={async () => {
+                    try {
+                      await api(`${base}/leaderboard/me`, { method: 'DELETE' });
+                      setBoard((rows) => rows.filter((r) => r.id !== run.publicId));
+                      notify(
+                        'Your public score was removed. This does not restore your ranked attempt.',
+                      );
+                    } catch (e) {
+                      notify(e.message);
+                    }
+                  }}
+                >
+                  Remove my public score
+                </button>
+              )}
+              <button className="text-button" onClick={() => navigate(`/p/${id}`)}>
+                Back to public trip
+              </button>
+            </div>
+          )}
           <button className="button outline" onClick={() => navigate('/')}>
             Back home
           </button>
         </div>
-        <RoundCards id={id} results={run.results} />
+        <RoundCards
+          id={id}
+          results={run.results}
+          photoUrl={(round) => `/api${base}/photos/${round}`}
+        />
         <section className="panel results-section">
           <h2>Leaderboard</h2>
-          <Standings rows={board} meId={run.publicId} />
+          <Standings rows={board} meId={run.publicId} tieBreakTime={publicTrip} />
           <button
             className="text-button"
             onClick={() =>
-              api(`/games/${id}/leaderboard`)
-                .then(setBoard)
+              api(`${base}/leaderboard`)
+                .then((data) => setBoard(Array.isArray(data) ? data : data.items))
                 .catch((e) => notify(e.message))
             }
           >
@@ -239,7 +327,7 @@ export default function Game({ id, navigate, notify }) {
     <main className="play-page">
       <PhotoViewer
         key={`photo-${round}`}
-        src={`/api/games/${id}/photos/${round}`}
+        src={`/api${base}/photos/${round}`}
         alt={`Mystery location for round ${round + 1}`}
       />
       <header className="play-heading">
@@ -305,6 +393,7 @@ export default function Game({ id, navigate, notify }) {
               </div>
             </div>
             {result.caption && <p className="reveal-caption">{result.caption}</p>}
+            <PhotoCredit credit={result.credit} />
             <button className="button full" disabled={busy} onClick={nextRound}>
               {run.completed ? 'See results' : 'Next photo'} <ArrowRight size={18} />
             </button>

@@ -12,7 +12,7 @@ export default function Legal({ page }) {
             ? 'Terms of use'
             : 'Cookies and browser storage'}
       </h1>
-      <p className="small-note">Effective 28 September 2026</p>
+      <p className="small-note">Effective 30 September 2026</p>
       {page === 'privacy' ? (
         <>
           <h2>Who operates TripGuessr</h2>
@@ -26,7 +26,8 @@ export default function Legal({ page }) {
               <strong>Creators:</strong> Google account ID, email address and basic profile, plus
               account and sign-in timestamps. Google/Firebase may retain the profile image supplied
               by Google. We use this to sign you in, assign ownership and let you manage your trips.
-              Your email is not shown to players.
+              Your email and Google profile are not shown to other players. Public rankings use a
+              nickname you choose.
             </li>
             <li>
               <strong>Trips:</strong> title, chosen host name, photos, captions and the location
@@ -38,7 +39,8 @@ export default function Legal({ page }) {
             <li>
               <strong>Players:</strong> chosen nickname, random browser identifier, guesses, scores
               and game timestamps. These keep your progress and make solo games and live lobbies
-              work. Players do not need a Google account.
+              work. Guests can practise and join friend rooms without a Google account. Public
+              ranked play requires sign-in and a separate choice to publish a score.
             </li>
             <li>
               <strong>Operations:</strong> our application records the route category (with trip and
@@ -67,11 +69,19 @@ export default function Legal({ page }) {
           </p>
           <h2>Who can see a trip</h2>
           <p>
-            Trips are link-only. There is no public trip directory. Anyone who receives the link can
-            enter, see the photos and, through gameplay, see their locations and captions. Links may
-            be forwarded. Solo leaderboards show nicknames and scores; live participants and the
-            host see group nicknames, guesses, distances and scores after each reveal. Choose a
-            nickname you are comfortable sharing.
+            New trips are link-only by default. Anyone who receives the link can enter, see the
+            photos and, through gameplay, see their locations and captions. Links may be forwarded.
+            Solo leaderboards show nicknames and scores; live participants and the host see group
+            nicknames, guesses, distances and scores after each reveal. Choose a nickname you are
+            comfortable sharing.
+          </p>
+          <p>
+            Creators can opt in to a separate public edition in Explore. Its photos, locations after
+            guesses, title and creator nickname can be viewed by anyone on the site. The original
+            private link, its players and its scores are not included. Public editions also ask
+            search engines not to index them. Unpublishing blocks the public edition; deleting the
+            original removes both editions. Pausing original sharing also blocks the public edition
+            and ends its friend rooms. This cannot remove copies people have already saved.
           </p>
           <p>
             Trip pages and photo/API responses tell cooperating search engines not to index them.
@@ -125,15 +135,46 @@ export default function Legal({ page }) {
             and timing, without photos, coordinates, captions or other players’ results. Anyone with
             that link can view it. Pausing or deleting the trip blocks it.
           </p>
+          <h2>Public scores, reports and your choices</h2>
+          <p>
+            Public ranked play is optional. With your consent (GDPR Article 6(1)(a)), a completed
+            ranked attempt publishes your chosen nickname, points, per-photo distances and guessing
+            times, and completion time. It does not publish your exact guesses, email or Google
+            identity. Remove a public score from the results page or My public scores in My trips;
+            this withdraws that consent without affecting processing already carried out. Practice
+            and friend-room results do not enter the public ranking. We keep a minimal
+            account-linked eligibility record while the edition exists to prevent repeat ranked
+            attempts, based on our legitimate interest in fair play. A browser eligibility record
+            expires after 30 days.
+          </p>
+          <p>
+            The <a href="/contact">contact form</a> accepts privacy, copyright, illegal-content,
+            nickname, service and appeal requests. Reports, optional contact details and replies are
+            private to the operator and holders of the private receipt link. Keep that link to read
+            replies; we do not automatically email you. Do not include passwords or unnecessary
+            sensitive information. Report records are kept while open and deleted 180 days after
+            closure, unless needed for a specific legal claim. Reopening a report restarts this
+            period.
+          </p>
           <h2>How long data stays</h2>
           <p>
-            Trips, uploaded photos, solo scores and stored lobby state remain until the creator
-            deletes the trip or we remove it following a valid request or abuse report. Saved live
-            pins expire with the 24-hour lobby. Shared result snapshots expire after 30 days,
-            including if the host has since opened a new lobby. Expired pins and snapshots are
-            queued for automatic database deletion, normally within another 24 hours. A live link
-            expires 24 hours after creation; expiry blocks access, but is not automatic data
-            deletion. Opening a new lobby replaces the previous lobby’s state. Creator account
+            Public-edition progress and exact guesses expire after 30 days; public friend rooms and
+            saved pins after 24 hours. A waiting public lobby closes after 15 minutes without
+            activity. These expired records are inaccessible immediately and queued for database
+            deletion, normally within another 24 hours. Public ranking summaries remain until you
+            withdraw them or the edition is deleted. Unpublishing hides an edition and its ranking
+            but does not delete them. Daily challenges and their ranking summaries remain available
+            as an archive; old daily challenges are practice-only. Official photo licence and
+            provenance records remain while needed to document our use of the photos.
+          </p>
+          <p>
+            For original link-only trips, uploaded photos, solo scores and stored lobby state remain
+            until the creator deletes the trip or we remove it following a valid request or abuse
+            report. Saved live pins expire with the 24-hour lobby. Shared result snapshots expire
+            after 30 days, including if the host has since opened a new lobby. Expired pins and
+            snapshots are queued for automatic database deletion, normally within another 24 hours.
+            A live link expires 24 hours after creation; expiry blocks access, but is not automatic
+            data deletion. Opening a new lobby replaces the previous lobby’s state. Creator account
             records remain until account deletion is requested. Demo progress and demo scores expire
             after 30 days. Expired demo records are hidden immediately and queued for automatic
             database deletion, which normally completes within another 24 hours.
@@ -153,11 +194,12 @@ export default function Legal({ page }) {
           </p>
           <h2>Your choices and rights</h2>
           <p>
-            Delete your trips or pause their sharing from My trips. You may request account
-            deletion, a copy of your data, corrections, objections to processing based on legitimate
-            interests, restriction, erasure or portability where applicable. For anonymous gameplay,
-            use the same browser if possible; we may need proportionate information to verify that a
-            request concerns your data. Never share your password or sign-in cookies.
+            Use the <a href="/contact">contact form</a> for privacy requests. Delete your trips or
+            pause their sharing from My trips. You may request account deletion, a copy of your
+            data, corrections, objections to processing based on legitimate interests, restriction,
+            erasure or portability where applicable. For anonymous gameplay, use the same browser if
+            possible; we may need proportionate information to verify that a request concerns your
+            data. Never share your password or sign-in cookies.
           </p>
           <p>
             We respond to rights requests within one month. If an extension is permitted and
@@ -192,17 +234,43 @@ export default function Legal({ page }) {
             someone’s home or other sensitive location without permission.
           </p>
           <p>
-            Trips are link-only, not confidential vaults. Anyone with a link can forward it and save
-            content. Search-engine exclusion cannot prevent this. You control sharing and can delete
-            your trips from My trips. Do not post links publicly if the photos are private.
+            Trips start link-only. You may explicitly publish a separate edition in Explore after
+            confirming photo rights and public visibility. Anyone with a link can forward it and
+            save content. Search-engine exclusion cannot prevent this. You control sharing and can
+            delete your trips from My trips. Do not post links publicly if the photos are private.
+          </p>
+          <h2>Public trips and official challenges</h2>
+          <p>
+            Publishing gives us permission to display that edition and its locations publicly for
+            gameplay. Check for identifiable people, licence restrictions and sensitive locations
+            before publishing. Public editions keep fixed photos, order and solo timer settings so
+            scores are comparable. Friend rooms have separate hosts, settings and results.
+          </p>
+          <p>
+            Official photos come from reviewed sources marked CC0. Photo credits and source/licence
+            links are shown after each reveal. Images are resized and stripped of metadata; CC0 does
+            not remove third-party privacy, trademark or other rights. Report a rights or location
+            problem using <a href="/contact">Contact</a> so we can review and withdraw the photo.
+          </p>
+          <p>
+            Public rankings allow one first attempt per Google account per edition, with your chosen
+            public nickname and consent. Viewing photos in practice or a friend room consumes ranked
+            eligibility for that account and browser. Daily challenges use five photos, 60 seconds
+            each, and change at midnight UTC. A ranked daily must start on its date and finish
+            within 30 minutes. Points rank first and total guessing time breaks ties. Replays and
+            archived dailies are for practice. These are casual rankings; multiple accounts or
+            outside help cannot be completely prevented. Do not manipulate rankings or impersonate
+            others.
           </p>
           <h2>Fair use and limits</h2>
           <p>
             Current limits are 5 trips per creator, 12 photos per trip, 2 MB per stored photo and 20
-            players per live lobby. Live links expire after 24 hours. We may change limits or
-            restrict access to prevent abuse, meet provider requirements or keep costs manageable.
-            Do not scrape private trips, bypass access controls, bulk-download map tiles, upload
-            malware or deliberately overload the service.
+            players per live lobby. Public publishing is limited to five editions per account per
+            UTC day. Public friend-room hosts can create ten rooms per UTC day with one active room
+            at a time. Live links expire after 24 hours. We may change limits or restrict access to
+            prevent abuse, meet provider requirements or keep costs manageable. Do not scrape
+            private trips, bypass access controls, bulk-download map tiles, upload malware or
+            deliberately overload the service.
           </p>
           <h2>Availability and removal</h2>
           <p>
@@ -220,9 +288,16 @@ export default function Legal({ page }) {
           </p>
           <h2>Reports, complaints and privacy</h2>
           <p>
-            Reports should identify the relevant trip and describe the problem. Avoid including
-            unnecessary personal data. We review privacy, copyright, illegal-content and service
-            complaints and respond as appropriate. Personal data handling is described in our{' '}
+            Use the <a href="/contact">contact form</a> to identify the relevant trip, photo or
+            nickname and describe the problem. Copyright reports should identify the protected work,
+            the disputed use and why you are authorised to report it. Include your name and a
+            contact address where needed for a legally complete notice; do not send personal data
+            you do not need to share. Avoid including unnecessary personal data. We review privacy,
+            copyright, illegal-content and service complaints and respond through the private
+            receipt page. Moderation may remove a public edition or suspend publishing, hosting and
+            ranked submission. Decisions include a reason, and affected creators can request review
+            through Contact; no automated moderation makes these decisions. We accept reports and
+            appeals in English or Polish. Personal data handling is described in our{' '}
             <a href="/privacy">Privacy notice</a> and <a href="/cookies">cookie notice</a>.
           </p>
           <p>

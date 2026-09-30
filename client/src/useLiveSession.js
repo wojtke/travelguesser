@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, json } from './api';
-export default function useLiveSession(id, liveId) {
-  const base = `/games/${id}/live/${liveId}`;
+export default function useLiveSession(id, liveId, publicTrip = false) {
+  const base = `/${publicTrip ? 'publications' : 'games'}/${id}/live/${liveId}`;
   const [live, setLive] = useState(null),
     [error, setError] = useState(''),
     [fatal, setFatal] = useState(''),

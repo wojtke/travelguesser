@@ -1,7 +1,252 @@
 {
-  "indexes": [],
+  "indexes": [
+    {
+      "collectionGroup": "publications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "state",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "publishedAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "publications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "state",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "searchPrefixes",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "publishedAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "publications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "state",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "kind",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "publishedAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "publications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "state",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "kind",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "searchPrefixes",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "publishedAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "officialAssets",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
+      ]
+    }
+  ],
   "fieldOverrides": [
-    { "collectionGroup": "games", "fieldPath": "live", "indexes": [] },
-    { "collectionGroup": "games", "fieldPath": "photos", "indexes": [] }
+    {
+      "collectionGroup": "games",
+      "fieldPath": "live",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "games",
+      "fieldPath": "photos",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "publications",
+      "fieldPath": "photos",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "publicRooms",
+      "fieldPath": "players",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "publicRuns",
+      "fieldPath": "results",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "publicScores",
+      "fieldPath": "rounds",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "officialAssets",
+      "fieldPath": "sourceMetadata",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "officialAssets",
+      "fieldPath": "cameraEvidence",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "officialAssets",
+      "fieldPath": "credit",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "publicReports",
+      "fieldPath": "messages",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "publicReports",
+      "fieldPath": "email",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "publicReports",
+      "fieldPath": "name",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "publicReports",
+      "fieldPath": "tokenHash",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "dailyChallenges",
+      "fieldPath": "assets",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "publicControl",
+      "fieldPath": "disabled",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "publicRuns",
+      "fieldPath": "expiresAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "publicRooms",
+      "fieldPath": "expiresAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "publicDrafts",
+      "fieldPath": "expiresAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "publicSharedResults",
+      "fieldPath": "expiresAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "rankClaims",
+      "fieldPath": "expiresAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "publicReports",
+      "fieldPath": "expiresAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "runs",
+      "fieldPath": "demoExpiresAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "leaderboard",
+      "fieldPath": "demoExpiresAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "liveDrafts",
+      "fieldPath": "expiresAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "sharedResults",
+      "fieldPath": "expiresAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "officialAssets",
+      "fieldPath": "sourceEvidence",
+      "indexes": []
+    }
   ]
 }

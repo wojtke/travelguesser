@@ -1,3 +1,4 @@
+import { deletePublishedEdition } from './public-cleanup.js';
 import { installStoreFeatures } from './store-features.js';
 import { defaultTripTitle, resultSummary } from './results.js';
 import { DEMO_ID, demoExpiry, retainedRun } from './demo-retention.js';
@@ -35,6 +36,9 @@ export class LocalStore {
       for (const collection of ['liveDrafts', 'sharedResults'])
         for (const [key, value] of Object.entries(data[collection] || {}))
           if (new Date(value.expiresAt).getTime() <= Date.now()) delete data[collection][key];
+      for (const [key, value] of Object.entries(data.publicData || {}))
+        if (value.expiresAt && new Date(value.expiresAt).getTime() <= Date.now())
+          delete data.publicData[key];
       return data;
     } catch (e) {
       if (e.code !== 'ENOENT') throw e;
@@ -44,7 +48,7 @@ export class LocalStore {
   async mutate(fn) {
     const task = this.queue.then(async () => {
       const data = await this.read();
-      const result = fn(data);
+      const result = await fn(data);
       await fs.mkdir(this.directory, { recursive: true });
       const target = path.join(this.directory, 'data.json');
       await fs.writeFile(`${target}.tmp`, JSON.stringify(data));
@@ -152,6 +156,16 @@ export class LocalStore {
     await fs.rm(path.join(this.directory, 'photos', id), { recursive: true, force: true });
     await this.mutate((d) => {
       checkOwner(d.games[id], uid);
+      const publicationId = d.games[id]?.publicationId;
+      if (publicationId)
+        for (const [key, value] of Object.entries(d.publicData || {})) {
+          if (
+            key === `publications/${publicationId}` ||
+            key.startsWith(`publications/${publicationId}/`) ||
+            (key.startsWith('publicProfiles/') && key.endsWith(`/scores/${publicationId}`))
+          )
+            delete d.publicData[key];
+        }
       delete d.games[id];
       for (const collection of ['liveDrafts', 'sharedResults'])
         for (const key of Object.keys(d[collection] || {}))
@@ -324,11 +338,13 @@ export class CloudStore {
     return rows.slice(0, 20);
   }
   async deleteGame(id, uid) {
+    let publicationId;
     await this.db.runTransaction(async (t) => {
       const gameRef = this.gameRef(id),
         creatorRef = this.creatorRef(uid);
       const [g, c] = await Promise.all([t.get(gameRef), t.get(creatorRef)]);
       checkOwner(g.data(), uid);
+      publicationId = g.data()?.publicationId;
       if (g.exists) t.update(gameRef, { status: 'deleting' });
       const creator = c.data();
       if (creator?.trips[id]) {
@@ -336,6 +352,7 @@ export class CloudStore {
         t.set(creatorRef, creator);
       }
     });
+    await deletePublishedEdition(this, publicationId);
     // Keep the slot until media is gone. A retry or cleanupUploads can finish interrupted deletes.
     await this.bucket.deleteFiles({ prefix: `games/${id}/` });
     await this.db.recursiveDelete(this.gameRef(id));

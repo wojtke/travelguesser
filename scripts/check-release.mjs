@@ -19,7 +19,24 @@ for (const base of urls) {
       assert.equal(bundle.status, 200);
       assert.match(bundle.headers.get('content-type') || '', /javascript/);
       await bundle.body.cancel();
-      console.log(`PASS: health, homepage and app bundle at ${new URL(base).hostname}`);
+      const config = await fetch(`${base}/api/community/config`, {
+        signal: AbortSignal.timeout(10000),
+      });
+      assert.equal(config.status, 200);
+      if ((await config.json()).enabled) {
+        const catalog = await fetch(`${base}/api/catalog?kind=official`, {
+          signal: AbortSignal.timeout(10000),
+        });
+        assert.equal(catalog.status, 200);
+        const page = await catalog.json();
+        assert.ok(Array.isArray(page.items));
+        assert.ok(page.items.length > 0, 'Public trips are enabled without an official fallback.');
+        assert.ok(page.items.every((p) => !p.photos && !p.ownerUid && !p.sourceGameId));
+        const daily = await fetch(`${base}/api/daily`, { signal: AbortSignal.timeout(10000) });
+        assert.equal(daily.status, 200);
+        assert.match((await daily.json()).date, /^\d{4}-\d{2}-\d{2}$/);
+      }
+      console.log(`PASS: health, app bundle and enabled public APIs at ${new URL(base).hostname}`);
       lastError = null;
       break;
     } catch (error) {

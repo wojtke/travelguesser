@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { registerLiveRoutes } from './routes/live.js';
 import { registerSoloRoutes } from './routes/solo.js';
+import { registerPublicRoutes } from './routes/public.js';
 import { createStore } from './store.js';
 import { cleanText, coordinates, gameSettings, HttpError, publicGame } from './game.js';
 import { newLive } from './live.js';
@@ -60,13 +61,20 @@ export function createApp({
   searchLocations = createLocationSearch(),
   log = process.env.NODE_ENV === 'production' ? writeLog : () => {},
   distDirectory = path.join(root, 'dist'),
+  publicEnabled = process.env.PUBLIC_TRIPS_ENABLED === 'true' ||
+    process.env.NODE_ENV !== 'production',
+  adminUids = (
+    process.env.ADMIN_UIDS || (process.env.NODE_ENV !== 'production' ? 'local-developer' : '')
+  )
+    .split(',')
+    .filter(Boolean),
 } = {}) {
   const authOrigin = auth.config.firebase ? `https://${auth.config.firebase.authDomain}` : null;
   const app = express();
   app.disable('x-powered-by');
   app.use(observeRequests(log));
   app.use((req, res, next) => {
-    if (/^\/(g(?:\/|$)|api(?:\/|$)|create(?:\/|$))/.test(req.path))
+    if (/^\/(g|p|explore|daily|contact|admin|api|create)(?:\/|$)/.test(req.path))
       res
         .set('X-Robots-Tag', 'noindex, nofollow, noarchive, noimageindex, nosnippet')
         .set('Cache-Control', 'no-store');
@@ -361,12 +369,22 @@ export function createApp({
       return {
         ...g,
         sharing: req.body.enabled,
+        sharingVersion: (g.sharingVersion || 0) + (req.body.enabled ? 0 : 1),
         ...(!req.body.enabled && g.live ? { live: { ...g.live, phase: 'finished' } } : {}),
       };
     });
     res.json(publicGame(game));
   });
   registerLiveRoutes(app, { store, requireCreator, requireCsrf, log });
+  registerPublicRoutes(app, {
+    store,
+    requireCreator,
+    requireCsrf,
+    log,
+    rateLimits,
+    publicEnabled,
+    adminUids,
+  });
   app.post('/api/games/:gameId/results/share', requireCsrf, async (req, res) => {
     const source = req.body?.source;
     if (typeof source !== 'string' || !(/^[a-zA-Z0-9_-]{8,40}$/.test(source) || source === 'solo'))

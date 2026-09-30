@@ -68,9 +68,9 @@ export async function preparePhoto(file) {
   }
 }
 
-export async function copyLink(id, notify) {
+export async function copyLink(id, notify, publicTrip = false) {
   try {
-    await navigator.clipboard.writeText(`${location.origin}/g/${id}`);
+    await navigator.clipboard.writeText(`${location.origin}/${publicTrip ? 'p' : 'g'}/${id}`);
     notify('Trip invitation copied — it does not include your results.');
   } catch {
     notify('Copy the trip link from your address bar or the share box.');

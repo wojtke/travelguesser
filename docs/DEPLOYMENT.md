@@ -43,3 +43,7 @@ gcloud run services update-traffic travelguesser \
 Revert the bad commit on `main` so the next automatic release contains the fix. For emergency maintenance, disable the workflow or remove the deployment trust before a temporary manual rollback; another successful `main` run otherwise promotes its own revision. The next successful pipeline explicitly promotes its new revision even after traffic was pinned by a rollback.
 
 Infrastructure provisioning, database migrations, Firebase configuration, TTL policies, budgets and Cloudflare Worker changes remain explicit operator operations. Ordinary app releases do not rerun the provisioning script or migrations.
+
+## Public feature rollout
+
+See [PUBLIC-TRIPS.md](PUBLIC-TRIPS.md) for additive Firestore index/TTL setup, reviewed photo seeding, the UID allowlist and the production `PUBLIC_TRIPS_ENABLED` flag. The ordinary CI deployment preserves existing environment settings and still promotes only after health checks. Keep candidate/provenance manifests, private operator identifiers and future daily answers out of Git. Public trip publication requires creator opt-in; no migration publishes existing user trips.

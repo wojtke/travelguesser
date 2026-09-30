@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { lazy, useEffect, useState } from 'react';
 import {
   ArrowUpRight,
   ArrowRight,
@@ -12,9 +12,13 @@ import {
   Trash2,
 } from 'lucide-react';
 import { api, json, copyLink } from './api';
+import DailyCard from './DailyCard';
+const PublishTrip = lazy(() => import('./Community').then((m) => ({ default: m.PublishTrip })));
 import Modal from './Modal';
 import GameSettings, { defaultSettings } from './GameSettings';
-export default function Home({ host, create, navigate, notify }) {
+export default function Home({ host, create, navigate, notify, community = false }) {
+  const [publishing, setPublishing] = useState(null),
+    [profile, setProfile] = useState(null);
   const [join, setJoin] = useState(''),
     [games, setGames] = useState([]),
     [loadError, setLoadError] = useState('');
@@ -56,9 +60,18 @@ export default function Home({ host, create, navigate, notify }) {
   useEffect(() => {
     if (host) load();
   }, [host]);
+  useEffect(() => {
+    if (host && community)
+      api('/public-profile')
+        .then(setProfile)
+        .catch((e) => notify(e.message));
+  }, [host, community]);
   function joinGame(e) {
     e.preventDefault();
     const raw = join.trim();
+    const publicMatch = raw.match(/\/p\/[\w-]+(?:\/live\/[\w-]+)?/);
+    const liveMatch = raw.match(/\/g\/[\w-]+\/live\/[\w-]+/);
+    if (publicMatch || liveMatch) return navigate((publicMatch || liveMatch)[0]);
     const id = raw.includes('/g/') ? raw.split('/g/')[1].split(/[?#/]/)[0] : raw;
     if (!/^[a-zA-Z0-9_-]{8,40}$/.test(id))
       return notify('Paste the trip link or code your friend sent you.');
@@ -103,6 +116,7 @@ export default function Home({ host, create, navigate, notify }) {
           </div>
         </div>
       </section>
+      {community && <DailyCard navigate={navigate} />}
       <section id="how-it-works" className="how-section">
         <div className="section-intro">
           <h2>How it works</h2>
@@ -138,6 +152,67 @@ export default function Home({ host, create, navigate, notify }) {
               New trip <Plus size={16} />
             </button>
           </div>
+          {profile?.notice && (
+            <p className="error" role="alert">
+              {profile.notice} <a href="/contact">Request review</a>
+            </p>
+          )}
+          {profile?.activeRoom && (
+            <p>
+              <button
+                className="text-button"
+                onClick={() =>
+                  navigate(`/p/${profile.activeRoom.publicationId}/live/${profile.activeRoom.id}`)
+                }
+              >
+                Open your most recent friend room
+              </button>
+            </p>
+          )}
+          {profile?.scores?.length > 0 && (
+            <details className="panel">
+              <summary>My public scores</summary>
+              {profile.scores.map((r) => (
+                <p key={r.id}>
+                  {r.title}{' '}
+                  <button
+                    className="text-button"
+                    onClick={async () => {
+                      try {
+                        await api(`/publications/${r.id}/leaderboard/me`, { method: 'DELETE' });
+                        setProfile((p) => ({
+                          ...p,
+                          scores: p.scores.filter((s) => s.id !== r.id),
+                        }));
+                        notify('Your public score was removed.');
+                      } catch (e) {
+                        notify(e.message);
+                      }
+                    }}
+                  >
+                    Remove my score
+                  </button>
+                </p>
+              ))}
+              {profile.cursor && (
+                <button
+                  className="text-button"
+                  onClick={async () => {
+                    try {
+                      const more = await api(
+                        `/public-profile?cursor=${encodeURIComponent(profile.cursor)}`,
+                      );
+                      setProfile((p) => ({ ...more, scores: [...p.scores, ...more.scores] }));
+                    } catch (e) {
+                      notify(e.message);
+                    }
+                  }}
+                >
+                  Load more scores
+                </button>
+              )}
+            </details>
+          )}
           {loadError && (
             <p className="error" role="alert">
               {loadError}
@@ -165,6 +240,11 @@ export default function Home({ host, create, navigate, notify }) {
                     </p>
                   </div>
                   <div className="trip-card-actions">
+                    {community && (
+                      <button className="button outline small" onClick={() => setPublishing(game)}>
+                        Public sharing
+                      </button>
+                    )}
                     <button
                       className="button outline small"
                       disabled={!game.sharing}
@@ -290,6 +370,14 @@ export default function Home({ host, create, navigate, notify }) {
             </button>
           </div>
         </Modal>
+      )}
+      {publishing && (
+        <PublishTrip
+          game={publishing}
+          close={() => setPublishing(null)}
+          notify={notify}
+          navigate={navigate}
+        />
       )}
     </main>
   );

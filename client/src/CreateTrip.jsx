@@ -456,9 +456,10 @@ export default function CreateTrip({ user, navigate, notify, signIn }) {
         </div>
         <GameSettings value={settings} onChange={setSettings} />
         <p className="privacy-note">
-          Trips are link-only, with no public directory. Anyone with the link can play and forward
-          it. You can pause sharing or delete the trip from My trips. Upload only photos you have
-          permission to share, and avoid sensitive locations. By creating a trip, you agree to the{' '}
+          Trips are link-only by default. Anyone with the link can play and forward it. You can
+          publish a separate public edition, pause sharing or delete the trip from My trips. Upload
+          only photos you have permission to share, and avoid sensitive locations. By creating a
+          trip, you agree to the{' '}
           <a href="/terms" target="_blank" rel="noreferrer">
             Terms
           </a>
