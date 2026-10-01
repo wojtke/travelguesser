@@ -52,6 +52,45 @@ function save(owner, id, meta, files = []) {
   return req;
 }
 
+test('My trips thumbnails are small, metadata-free and owner-only even after a guest joins', async () => {
+  const { owner, id, meta } = await fixture('creator-preview-owner');
+  const url = `${meta.photos[0].url}&thumbnail=1`;
+  const original = await sharp({
+    create: { width: 1200, height: 900, channels: 3, background: '#406080' },
+  })
+    .withExif({ IFD0: { Artist: 'Private metadata' } })
+    .jpeg()
+    .toBuffer();
+  await store.savePhoto(id, meta.photos[0].key, original);
+  const other = request.agent(app);
+  await signIn(other, 'creator-preview-other');
+  const guest = request.agent(app);
+  await guest.get(url).expect(401);
+  await other.get(url).expect(403);
+  for (const player of [guest, other]) {
+    const view = (await player.get(`/api/games/${id}`).expect(200)).body;
+    assert.ok(!JSON.stringify(view).includes('/edit/photos/'));
+    assert.equal(view.game.photos, undefined);
+    await player.post(`/api/games/${id}/join`).send({ name: 'Player' }).expect(200);
+    await player.get(url).expect(player === guest ? 401 : 403);
+  }
+  const preview = await owner.get(url).expect(200).expect('Content-Type', /jpeg/);
+  assert.match(preview.headers['cache-control'], /private, no-store/);
+  const metadata = await sharp(preview.body).metadata();
+  assert.equal(metadata.width, 240);
+  assert.equal(metadata.height, 160);
+  assert.equal(metadata.exif, undefined);
+  assert.ok(preview.body.length < original.length);
+  await owner.get(`${meta.photos[0].url}&thumbnail=2000`).expect(400);
+  await owner.get(`/api/games/${id}/edit/photos/1?revision=0&thumbnail=1`).expect(404);
+  await owner.get(`/api/games/${id}/edit/photos/0?revision=99&thumbnail=1`).expect(409);
+  await owner.patch(`/api/games/${id}/sharing`).send({ enabled: false }).expect(200);
+  await owner.get(url).expect(200);
+  await other.get(url).expect(403);
+  await save(owner, id, { ...meta, title: 'Updated preview trip' }).expect(200);
+  await owner.get(url).expect(409);
+});
+
 test('only the owner can load and save a trip; CSRF and photo references are checked', async () => {
   const { owner, id, meta } = await fixture('creator-edit-owner');
   const other = request.agent(app);

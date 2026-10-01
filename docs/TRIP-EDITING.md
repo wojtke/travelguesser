@@ -2,6 +2,14 @@
 
 Added after the screenshot feedback on 30 September 2026. Use **My trips → Edit trip** to change the title, host nickname, captions, coordinates, timer/game defaults, photo order, and uploaded photos. Saving preserves the trip ID, link, ownership, creation date and sharing state. Editing is available even when all five creator slots are full. Only new files are uploaded; existing photos reuse their private object keys.
 
+## My trips and owner previews
+
+My trips uses one row per trip, with a stack of up to three photos, a photo count, creation date and explicit link-sharing status. Edit, copy the trip link, and host/open a live lobby are the main actions. Paused trips offer **Enable sharing** in place of copying a link. **More options** expands inline for opening the trip, public sharing, pausing link sharing and deletion (still confirmed in a dialog). These controls wrap for tablet/mobile and are keyboard accessible.
+
+The stack requests only the first three owner editor photos with `thumbnail=1`. The server checks creator ownership and the current revision before reading or resizing media. It returns fixed 240×160 JPEG previews, strips metadata, and sets `private, no-store`. Anonymous guests and other signed-in creators cannot fetch them, even after joining a trip. Public trip/catalog responses gain no previews or photo references. Browsers lazy-load the images; a failed image shows a camera placeholder without breaking the controls.
+
+Previews are generated from the existing private object on demand, with no additional stored files, database fields, background jobs or services. Each preview still incurs the usual authenticated request, trip read and photo-object read; up to 15 small preview responses can load for a five-trip owner list. This trades a small bounded amount of resizing work for less browser bandwidth and avoids a public image cache. Revision URLs prevent showing a reordered photo under an old revision. API and browser regression tests cover authorization, metadata stripping, size limits, stale revisions, sharing controls and layouts down to 320px.
+
 ## Existing games and public editions
 
 Changes apply to new playthroughs and new lobbies. Each new solo run and live lobby stores a private snapshot of its title, photos, locations and rules. On the first edit, `originalTrip` preserves the original configuration for older runs/lobbies without a snapshot. This avoids a bulk migration. Returning players retain their saved playthrough, including completed results. Solo leaderboard responses select that playthrough's trip revision; a new visitor sees the latest revision's scores. The leaderboard scan remains bounded to 100 candidates rather than scanning all historical results.

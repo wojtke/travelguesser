@@ -58,16 +58,6 @@
   gap: 22px;
   font-size: 12px;
 }
-.trip-card {
-  flex-wrap: wrap;
-}
-.trip-card-actions {
-  flex-wrap: wrap;
-  gap: 9px;
-}
-.sharing-toggle {
-  font-size: 11px;
-}
 .live-page {
   max-width: 1160px;
   padding: 35px 30px 60px;
@@ -467,14 +457,4 @@
 }
 .my-public-score .text-button {
   font-size: 12px;
-}
-.trip-card-actions {
-  width: 100%;
-  justify-content: flex-start;
-  margin: 4px 0 0;
-  padding-top: 14px;
-  border-top: 1px solid var(--line);
-}
-.trip-card-actions .button {
-  margin: 0;
 }

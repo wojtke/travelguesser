@@ -83,7 +83,7 @@ test('My trips opens the editor; photos, order, locations and options save to th
   await expect(page.locator('.photo-thumb')).toHaveCount(2);
 });
 
-test('public scores have padding and trip actions wrap within their cards on desktop and mobile', async ({
+test('My trips uses one row per trip with private photo stacks and clear responsive controls', async ({
   page,
 }) => {
   await signIn(page);
@@ -95,8 +95,35 @@ test('public scores have padding and trip actions wrap within their cards on des
       },
     }),
   );
+  const games = (await (await page.request.get('/api/host/games')).json()).slice(0, 3);
+  games[0] = { ...games[0], title: 'A summer in the mountains', rounds: 8, sharing: true };
+  games[1] = {
+    ...games[1],
+    title: 'Japan · cities, coastlines and a very long weekend',
+    rounds: 3,
+    sharing: false,
+    liveId: null,
+  };
+  games[2] = { ...games[2], title: 'A day in Paris', rounds: 1, sharing: true };
+  await page.route('**/api/host/games', (route) => route.fulfill({ json: games }));
+  await page.route('**/edit/photos/*?*thumbnail=1', (route) => {
+    const i = Number(new URL(route.request().url()).pathname.split('/').pop());
+    return route.fulfill({
+      path: `server/demo/demo-${['paris', 'sydney', 'sanfrancisco'][i]}.jpg`,
+      contentType: 'image/jpeg',
+    });
+  });
+  await page.route(`**/api/games/${games[1].id}/sharing`, (route) => {
+    games[1].sharing = route.request().postDataJSON().enabled;
+    return route.fulfill({ json: { sharing: games[1].sharing } });
+  });
   await page.goto('/');
-  for (const width of [1440, 820, 390]) {
+  const cards = page.locator('.trip-card');
+  await expect(cards).toHaveCount(3);
+  await expect(cards.first().locator('.trip-stack-photo')).toHaveCount(3);
+  await expect(cards.last().locator('.trip-stack-photo')).toHaveCount(1);
+  await expect(cards.nth(1).getByRole('button', { name: 'Host live' })).toBeDisabled();
+  for (const width of [1440, 820, 390, 320]) {
     await page.setViewportSize({ width, height: 1000 });
     const panel = page.locator('.my-public-scores');
     await panel.scrollIntoViewIfNeeded();
@@ -108,10 +135,77 @@ test('public scores have padding and trip actions wrap within their cards on des
     const bounds = await panel.boundingBox();
     const card = await page.locator('.trip-card').first().boundingBox();
     expect(card.y - (bounds.y + bounds.height)).toBeGreaterThanOrEqual(20);
-    await page.screenshot({ path: test.info().outputPath(`my-trips-${width}.png`) });
+    for (let i = 0; i < 3; i++) {
+      const bounds = await cards.nth(i).boundingBox();
+      expect(bounds.x).toBe(card.x);
+      expect(bounds.width).toBe(card.width);
+      if (i) {
+        const previous = await cards.nth(i - 1).boundingBox();
+        expect(bounds.y).toBeGreaterThanOrEqual(previous.y + previous.height + 12);
+      }
+      for (const button of await cards.nth(i).getByRole('button').all()) {
+        const buttonBounds = await button.boundingBox();
+        expect(buttonBounds.x).toBeGreaterThanOrEqual(bounds.x);
+        expect(buttonBounds.x + buttonBounds.width).toBeLessThanOrEqual(bounds.x + bounds.width);
+        expect(buttonBounds.height).toBeGreaterThanOrEqual(42);
+      }
+    }
+    await expect
+      .poll(() =>
+        cards
+          .locator('img')
+          .evaluateAll((images) => images.every((img) => img.complete && img.naturalWidth > 0)),
+      )
+      .toBe(true);
+    await page
+      .locator('.my-trips')
+      .screenshot({ path: test.info().outputPath(`my-trips-${width}.png`) });
   }
+  await cards.nth(1).getByRole('button', { name: 'Enable sharing', exact: true }).click();
+  await expect(cards.nth(1).getByRole('button', { name: 'Copy trip link' })).toBeVisible();
+  await expect(cards.nth(1).getByRole('button', { name: 'Host live' })).toBeEnabled();
+  const more = cards.first().getByRole('button', { name: 'More options' });
+  await more.focus();
+  await page.keyboard.press('Enter');
+  await expect(more).toHaveAttribute('aria-expanded', 'true');
+  await expect(cards.first().getByRole('button', { name: 'Public sharing' })).toBeVisible();
+  await cards.first().getByRole('button', { name: 'Delete trip', exact: true }).click();
+  await expect(page.getByRole('dialog')).toContainText('A summer in the mountains');
+  await page.getByRole('button', { name: 'Keep trip', exact: true }).click();
+  await expect(cards).toHaveCount(3);
+  await more.click();
+  await expect(cards.first().getByRole('button', { name: 'Delete trip', exact: true })).toHaveCount(
+    0,
+  );
   await page.getByText('My public scores', { exact: false }).click();
   await expect(page.getByRole('link', { name: 'Daily challenge · 2026-09-30' })).toBeVisible();
+});
+
+test('new players never request owner previews and a failed owner thumbnail has a fallback', async ({
+  page,
+}) => {
+  const previews = [];
+  page.on('request', (req) => {
+    if (req.url().includes('/edit/photos/')) previews.push(req.url());
+  });
+  await page.goto('/');
+  await expect(page.getByRole('main').getByRole('button', { name: 'Create a trip' })).toBeVisible();
+  await expect(page.locator('.trip-photo-stack')).toHaveCount(0);
+  await page.goto('/g/timed-browser-trip');
+  await expect(
+    page.getByRole('heading', { name: 'timed-browser-trip', exact: true }),
+  ).toBeVisible();
+  expect(previews).toEqual([]);
+  await signIn(page);
+  await page.route('**/edit/photos/*?*thumbnail=1', (route) => route.fulfill({ status: 503 }));
+  await page.goto('/');
+  const stack = page.locator('.trip-photo-stack').first();
+  await stack.scrollIntoViewIfNeeded();
+  await expect(stack.locator('img')).toHaveCount(0);
+  await expect(stack.locator('svg').first()).toBeVisible();
+  await expect(
+    page.locator('.trip-card').first().getByRole('button', { name: 'Edit trip' }),
+  ).toBeEnabled();
 });
 
 test('public trip actions have space before explanatory text at each viewport size', async ({

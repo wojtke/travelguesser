@@ -18,6 +18,8 @@ Live sessions use SSE through the existing server and one Firestore listener per
 
 Open **My trips → Edit trip** to update photos, order, captions, locations, title and game options. The invite link stays the same. Existing playthroughs and public editions keep their original photos and rules; new games use the changes. Earlier media counts toward the existing 24 MiB per-trip storage allowance until trip deletion. See [editing behavior, recovery and validation](docs/TRIP-EDITING.md).
 
+My trips shows one trip per row with owner-only photo thumbnail stacks, clear sharing status and labeled edit/invite/live controls. **More options** contains public sharing, sharing pause and deletion. Previews are authenticated, resized and never available to guests or other creators.
+
 ## Public trips and daily challenges
 
 [Explore public trips](https://tripguessr.com/explore): opt-in community editions, official five-photo trips, and a daily challenge that changes at midnight UTC. Guests can practise; Google sign-in and public-score consent enable one ranked first attempt per edition. Rankings use points then guessing time. Players can withdraw their scores. Any signed-in user can create a separate private friend room on a public trip.

@@ -1,18 +1,7 @@
 import { lazy, useEffect, useState } from 'react';
-import {
-  ArrowUpRight,
-  ArrowRight,
-  MapPin,
-  Compass,
-  Camera,
-  Users,
-  Copy,
-  Plus,
-  Link,
-  Trash2,
-  Pencil,
-} from 'lucide-react';
-import { api, json, copyLink } from './api';
+import { ArrowUpRight, ArrowRight, MapPin, Compass, Camera, Users, Plus, Link } from 'lucide-react';
+import { api, json } from './api';
+import MyTrip from './MyTrip';
 import DailyCard from './DailyCard';
 const PublishTrip = lazy(() => import('./Community').then((m) => ({ default: m.PublishTrip })));
 import Modal from './Modal';
@@ -35,7 +24,7 @@ export default function Home({ host, create, navigate, notify, community = false
   async function toggleSharing(game) {
     try {
       await api(`/games/${game.id}/sharing`, json('PATCH', { enabled: !game.sharing }));
-      load();
+      await load();
       notify(
         game.sharing ? 'Link sharing paused. Active live sessions ended.' : 'Link sharing enabled.',
       );
@@ -148,6 +137,7 @@ export default function Home({ host, create, navigate, notify, community = false
           <div className="section-heading">
             <div>
               <h2>My trips</h2>
+              <p className="my-trips-intro">Photo previews are visible only to you.</p>
             </div>
             <button className="text-button" onClick={create}>
               New trip <Plus size={16} />
@@ -236,74 +226,18 @@ export default function Home({ host, create, navigate, notify, community = false
             </p>
           )}
           {games.length ? (
-            <div className="trip-grid">
+            <div className="my-trips-list">
               {games.map((game) => (
-                <article className="trip-card" key={game.id}>
-                  <div className="trip-card-icon">
-                    <MapPin size={26} />
-                  </div>
-                  <div>
-                    <span className="eyebrow">
-                      {game.rounds} PHOTO{game.rounds === 1 ? '' : 'S'} ·{' '}
-                      {new Date(game.createdAt).toLocaleDateString(undefined, {
-                        month: 'short',
-                        day: 'numeric',
-                      })}
-                    </span>
-                    <h3>{game.title}</h3>
-                    <p>
-                      {game.sharing ? 'Link-only' : 'Sharing paused'} ·{' '}
-                      {game.liveId ? 'Live lobby open' : 'Play at your own pace'}
-                    </p>
-                  </div>
-                  <div className="trip-card-actions">
-                    <button
-                      className="button outline small"
-                      onClick={() => navigate(`/g/${game.id}/edit`)}
-                    >
-                      <Pencil size={15} /> Edit trip
-                    </button>
-                    {community && (
-                      <button className="button outline small" onClick={() => setPublishing(game)}>
-                        Public sharing
-                      </button>
-                    )}
-                    <button
-                      className="button outline small"
-                      disabled={!game.sharing}
-                      onClick={() => hostLive(game)}
-                    >
-                      <Users size={15} />
-                      {game.liveId ? 'Open lobby' : 'Host live'}
-                    </button>
-                    <button
-                      className="text-button sharing-toggle"
-                      onClick={() => toggleSharing(game)}
-                    >
-                      {game.sharing ? 'Pause sharing' : 'Enable sharing'}
-                    </button>
-                    <button
-                      className="button outline small"
-                      onClick={() => copyLink(game.id, notify)}
-                    >
-                      <Copy size={15} /> Invite
-                    </button>
-                    <button
-                      className="icon-button"
-                      aria-label={`Open ${game.title}`}
-                      onClick={() => navigate(`/g/${game.id}`)}
-                    >
-                      <ArrowUpRight size={20} />
-                    </button>
-                    <button
-                      className="icon-button"
-                      aria-label={`Delete ${game.title}`}
-                      onClick={() => setDeleting(game)}
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </article>
+                <MyTrip
+                  key={game.id}
+                  game={game}
+                  navigate={navigate}
+                  notify={notify}
+                  hostLive={hostLive}
+                  toggleSharing={toggleSharing}
+                  publish={community ? setPublishing : undefined}
+                  remove={setDeleting}
+                />
               ))}
             </div>
           ) : (

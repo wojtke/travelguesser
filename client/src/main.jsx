@@ -18,6 +18,7 @@ import './community.css';
 import './styles.css';
 import './game.css';
 import './live.css';
+import './my-trips.css';
 function App() {
   const [route, setRoute] = useState(location.pathname + location.search);
   const path = route.split('?')[0];

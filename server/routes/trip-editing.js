@@ -42,10 +42,16 @@ export function registerTripEditingRoutes(
     const i = Number(req.params.photo);
     if (!Number.isInteger(i) || i < 0 || i >= req.game.photos.length)
       throw new HttpError(404, 'Photo not found.');
-    res
-      .type('jpeg')
-      .set('Cache-Control', 'private, no-store')
-      .send(await store.getPhoto(req.game.id, req.game.photos[i].key));
+    if (req.query.thumbnail !== undefined && req.query.thumbnail !== '1')
+      throw new HttpError(400, 'Unknown preview size.');
+    let photo = await store.getPhoto(req.game.id, req.game.photos[i].key);
+    if (req.query.thumbnail === '1')
+      photo = await sharp(photo, { limitInputPixels: 40_000_000 })
+        .rotate()
+        .resize({ width: 240, height: 160, fit: 'cover', withoutEnlargement: true })
+        .jpeg({ quality: 70 })
+        .toBuffer();
+    res.type('jpeg').set('Cache-Control', 'private, no-store').send(photo);
   });
   app.patch(
     '/api/games/:gameId',
