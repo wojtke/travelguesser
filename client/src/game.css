@@ -437,17 +437,107 @@ body:has(.play-page) > #root > .site-footer {
   }
 }
 /* Creation, results and synchronized live rounds. */
-.seconds-input {
+.seconds-field {
+  min-width: 0;
+}
+.seconds-heading {
   display: flex;
-  gap: 12px;
+  justify-content: space-between;
+  gap: 16px;
   align-items: center;
+  margin-bottom: 6px;
 }
-.seconds-input input[type='range'] {
-  flex: 1;
-  min-width: 80px;
+.seconds-heading label {
+  margin: 0;
+  line-height: 1.5;
 }
-.seconds-input input[type='number'] {
-  width: 100px;
+.seconds-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: #677561;
+}
+.seconds-value input {
+  width: 86px;
+  padding: 10px 8px;
+  min-height: 44px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 500;
+}
+.seconds-track input[type='range'] {
+  display: block;
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.seconds-track input[type='range']::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 10px;
+  background: linear-gradient(
+    to right,
+    var(--green) var(--timer-progress),
+    #dce2d2 var(--timer-progress)
+  );
+}
+.seconds-track input[type='range']::-moz-range-track {
+  height: 6px;
+  border-radius: 10px;
+  background: linear-gradient(
+    to right,
+    var(--green) var(--timer-progress),
+    #dce2d2 var(--timer-progress)
+  );
+}
+.seconds-track input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 22px;
+  height: 22px;
+  border: 3px solid #fffefa;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 0 1px #62775b;
+  margin-top: -8px;
+}
+.seconds-track input[type='range']::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: 3px solid #fffefa;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 0 1px #62775b;
+}
+.seconds-scale {
+  position: relative;
+  height: 22px;
+  color: #677561;
+  font-size: 10px;
+}
+.seconds-scale span {
+  position: absolute;
+  transform: translateX(-50%);
+}
+.seconds-scale span:first-child {
+  transform: none;
+}
+.seconds-scale span:last-child {
+  transform: translateX(-100%);
+}
+.seconds-field > small {
+  display: block;
+  color: #677561;
+  font-size: 11px;
+  line-height: 1.6;
+  font-weight: 400;
 }
 .photo-navigation {
   display: flex;

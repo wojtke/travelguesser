@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Compass, X } from 'lucide-react';
 
-export default function Modal({ close, title, children }) {
+export default function Modal({ close, title, children, className = '' }) {
   const ref = useRef(null);
   useEffect(() => {
     const old = document.activeElement;
@@ -39,7 +39,7 @@ export default function Modal({ close, title, children }) {
       }}
     >
       <section
-        className="modal"
+        className={`modal ${className}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"

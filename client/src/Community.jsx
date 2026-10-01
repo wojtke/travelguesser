@@ -243,7 +243,11 @@ export function PublicTrip({ id, navigate, notify, user, signIn }) {
       </section>
       {board.length > 0 && <ScoreMatrix rows={board} rounds={game.rounds} />}
       {hosting && (
-        <Modal title="Play with friends" close={() => setHosting(false)}>
+        <Modal
+          title="Play with friends"
+          close={() => setHosting(false)}
+          className="game-setup-modal"
+        >
           <form
             onSubmit={async (e) => {
               e.preventDefault();

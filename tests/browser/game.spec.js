@@ -163,12 +163,18 @@ test('creation highlights incomplete photos, preserves edits on Next and accepts
   expect(details.y).toBeGreaterThan(photoBox.y + photoBox.height - 1);
   await page.getByRole('combobox', { name: 'Round timer', exact: true }).selectOption('fixed');
   await page.getByRole('spinbutton', { name: 'Time per photo', exact: false }).fill('7');
-  await expect(page.getByRole('slider', { name: 'Time per photo slider' })).toHaveValue('7');
+  await expect(page.getByRole('slider', { name: 'Time per photo slider' })).toHaveAttribute(
+    'aria-valuenow',
+    '7',
+  );
   await page.getByRole('spinbutton', { name: 'Time per photo', exact: false }).fill('3601');
   await page.getByRole('button', { name: 'Create & share trip' }).click();
   await expect(page.getByRole('alert')).toContainText('1 to 3600');
   await page.getByRole('spinbutton', { name: 'Time per photo', exact: false }).fill('3600');
-  await expect(page.getByRole('slider', { name: 'Time per photo slider' })).toHaveValue('3600');
+  await expect(page.getByRole('slider', { name: 'Time per photo slider' })).toHaveAttribute(
+    'aria-valuenow',
+    '3600',
+  );
   await page.screenshot({ path: test.info().outputPath('creation.png'), fullPage: true });
 });
 

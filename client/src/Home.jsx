@@ -276,15 +276,13 @@ export default function Home({ host, create, navigate, notify, community = false
         </form>
       </section>
       {hosting && (
-        <Modal close={() => setHosting(null)} title="Host a live game">
+        <Modal close={() => setHosting(null)} title="Host a live game" className="game-setup-modal">
           <p>
             {hosting.title} · {hosting.rounds} photos. Friends join the lobby before you start.
           </p>
-          <GameSettings value={lobbySettings} onChange={setLobbySettings} showMode={false} />
-          <button
-            className="button full"
-            disabled={hostBusy}
-            onClick={async () => {
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
               setHostBusy(true);
               try {
                 const lobby = await api(`/games/${hosting.id}/live`, json('POST', lobbySettings));
@@ -296,8 +294,11 @@ export default function Home({ host, create, navigate, notify, community = false
               }
             }}
           >
-            Open lobby <ArrowRight size={18} />
-          </button>
+            <GameSettings value={lobbySettings} onChange={setLobbySettings} showMode={false} />
+            <button className="button full" disabled={hostBusy}>
+              Open lobby <ArrowRight size={18} />
+            </button>
+          </form>
         </Modal>
       )}
       {deleting && (
